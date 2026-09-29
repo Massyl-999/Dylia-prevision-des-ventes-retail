@@ -61,12 +61,6 @@ Pour vérifier les six CSV avant le lancement :
 python scripts/validate_input_data.py --data-dir Deployment_Data_Test
 ```
 
-## Publication GitHub
-
-Ne publiez pas les répertoires `Deployment_Data_Test/`, `Store39_Dataset/`, `Cache/`, `Models/`, `Models_XGB/` ni les études Optuna. Ils sont déjà protégés par `.gitignore`.
-
-Suivez [docs/PUBLICATION_CHECKLIST.md](docs/PUBLICATION_CHECKLIST.md) avant le premier `git push`. Vérifiez en particulier les droits de redistribution des données.
-
 ## Licence
 
 Le code est distribué sous licence [MIT](LICENSE). Cette licence s'applique au code du dépôt, pas automatiquement aux jeux de données externes ni aux modèles entraînés. Vérifiez et documentez les droits de redistribution de ces artefacts séparément.
