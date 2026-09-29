@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Generated data, caches and training artefacts
+Cache/
+Store39_Dataset/
+Deployment_Data_Test/
+Models/
+Models_XGB/
+optuna_studies/
+optuna_studies_xgb/
+*.pkl
+
+# Large data files are not versioned. Keep only the documented samples below.
+*.csv
+!data/sample/*.csv
+!data/raw/.gitkeep
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

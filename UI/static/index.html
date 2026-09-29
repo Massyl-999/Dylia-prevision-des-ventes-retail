@@ -1,0 +1,3475 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marché de Dylia | Prévision des Ventes IA</title>
+  <meta name="description" content="Tableau de bord de prévision des ventes pour le Marché de Dylia, Tizi-Ouzou. Powered by 28 modèles LightGBM — horizon 28 jours.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            heading: ['Outfit', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: { 50:'#eef2ff',100:'#e0e7ff',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',900:'#312e81' },
+            darkbg: '#06060f',
+            panelbg: '#0c0c1e',
+            cardbg: 'rgba(255,255,255,0.025)',
+            bordercol: 'rgba(255,255,255,0.07)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Vue 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <!-- ApexCharts -->
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Leaflet (carte interactive, sans clé API) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background: #06060f;
+      color: #f1f5f9;
+      font-family: 'Inter', sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* Glass */
+    .glass {
+      background: rgba(255,255,255,0.018);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.065);
+    }
+    .glass-hover {
+      transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+    }
+    .glass-hover:hover {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(99,102,241,0.35);
+      box-shadow: 0 0 28px rgba(99,102,241,0.12);
+      transform: translateY(-2px);
+    }
+
+    /* Sidebar active */
+    .sidebar-active {
+      background: linear-gradient(135deg,rgba(99,102,241,0.22) 0%,rgba(99,102,241,0.06) 100%);
+      border-left: 3px solid #6366f1;
+      color: #ffffff;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width:5px; height:5px; }
+    ::-webkit-scrollbar-track { background:#06060f; }
+    ::-webkit-scrollbar-thumb { background:#1e1e3a; border-radius:4px; }
+    ::-webkit-scrollbar-thumb:hover { background:#6366f1; }
+
+    /* Shimmer */
+    .shimmer {
+      background: linear-gradient(90deg,rgba(255,255,255,0.02) 25%,rgba(255,255,255,0.07) 50%,rgba(255,255,255,0.02) 75%);
+      background-size:200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+    /* Gradient text */
+    .grad-text {
+      background: linear-gradient(135deg,#818cf8,#6366f1,#a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Feature family cards */
+    .feat-card {
+      background: rgba(255,255,255,0.025);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 16px;
+      padding: 16px;
+      transition: all 0.25s;
+    }
+    .feat-card:hover {
+      border-color: rgba(99,102,241,0.35);
+      background: rgba(99,102,241,0.05);
+      transform: translateY(-1px);
+    }
+
+    /* Progress bar */
+    .progress-bar {
+      height: 6px;
+      border-radius: 99px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    /* Badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    /* Nwrmsle gradient color by value */
+    .nw-low  { color: #34d399; }
+    .nw-mid  { color: #fbbf24; }
+    .nw-high { color: #f87171; }
+
+    /* Approach comparison cards */
+    .approach-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px;
+      padding: 20px;
+    }
+
+    /* Tech badge */
+    .tech-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px;
+      padding: 12px 16px;
+      transition: all 0.2s;
+    }
+    .tech-badge:hover {
+      border-color: rgba(99,102,241,0.3);
+      background: rgba(99,102,241,0.06);
+    }
+
+    /* Glow pulse */
+    @keyframes glow-pulse {
+      0%,100% { box-shadow: 0 0 10px rgba(99,102,241,0.2); }
+      50% { box-shadow: 0 0 25px rgba(99,102,241,0.45); }
+    }
+    .glow-anim { animation: glow-pulse 2.5s ease-in-out infinite; }
+
+    /* ===== LIGHT MODE ===== */
+    html.light body { background: #f1f5f9; color: #0f172a; }
+    html.light .glass {
+      background: rgba(255,255,255,0.75) !important;
+      border-color: rgba(0,0,0,0.08) !important;
+      backdrop-filter: blur(16px);
+    }
+    html.light .glass-hover:hover { background: rgba(255,255,255,0.92) !important; }
+    html.light .border-bordercol { border-color: rgba(0,0,0,0.08) !important; }
+    html.light #app-sidebar { background: rgba(255,255,255,0.9) !important; border-color: rgba(0,0,0,0.08) !important; }
+    html.light .text-white { color: #0f172a !important; }
+    html.light .text-slate-400 { color: #475569 !important; }
+    html.light .text-slate-500 { color: #64748b !important; }
+    html.light .text-slate-300 { color: #334155 !important; }
+    html.light .text-slate-200 { color: #1e293b !important; }
+    html.light .text-slate-600 { color: #94a3b8 !important; }
+    html.light .bg-\[#12122d\] { background: #f8fafc !important; }
+    html.light .filter-search-bar { background: rgba(0,0,0,0.04) !important; border-color: rgba(0,0,0,0.1) !important; }
+    html.light .filter-search-bar input { color: #0f172a !important; }
+    html.light .filter-search-bar input::placeholder { color: #94a3b8 !important; }
+    html.light .filter-pill { background: rgba(0,0,0,0.05) !important; border-color: rgba(0,0,0,0.1) !important; color: #475569 !important; }
+    html.light .filter-pill.active { background: rgba(99,102,241,0.15) !important; border-color: rgba(99,102,241,0.4) !important; color: #4f46e5 !important; }
+    html.light .sidebar-active { background: rgba(99,102,241,0.12) !important; }
+    html.light .grad-text { background: linear-gradient(135deg,#1e293b,#4f46e5) !important; -webkit-background-clip:text !important; -webkit-text-fill-color:transparent !important; }
+    html.light .bg-white\/5 { background: rgba(0,0,0,0.04) !important; }
+    html.light .hover\:bg-white\/10:hover { background: rgba(0,0,0,0.08) !important; }
+    html.light .tl-day.normal { background: rgba(0,0,0,0.04) !important; color: #94a3b8 !important; border-color: rgba(0,0,0,0.08) !important; }
+    html.light .alert-item:hover { background: rgba(0,0,0,0.02) !important; }
+    html.light .whatif-day-btn { background: rgba(0,0,0,0.04) !important; border-color: rgba(0,0,0,0.1) !important; color: #94a3b8 !important; }
+    html.light .whatif-day-btn.on { background: rgba(99,102,241,0.15) !important; border-color: rgba(99,102,241,0.4) !important; color: #4f46e5 !important; }
+
+    /* ===== LANG ARABIC RTL ===== */
+    html[dir="rtl"] #app { flex-direction: row-reverse; }
+    html[dir="rtl"] .space-x-3 > * + * { margin-left: 0 !important; margin-right: 0.75rem !important; }
+    html[dir="rtl"] .space-x-2 > * + * { margin-left: 0 !important; margin-right: 0.5rem !important; }
+    html[dir="rtl"] .ml-auto { margin-left: 0 !important; margin-right: auto !important; }
+    html[dir="rtl"] #app-sidebar { border-right: none !important; border-left: 1px solid rgba(255,255,255,0.07) !important; }
+    html[dir="rtl"] .alert-item { border-left: none !important; border-right: 3px solid transparent !important; }
+    html[dir="rtl"] .alert-item.danger { border-right-color: #f87171 !important; }
+    html[dir="rtl"] .alert-item.warning { border-right-color: #fbbf24 !important; }
+    html[dir="rtl"] .alert-item.success { border-right-color: #34d399 !important; }
+    html[dir="rtl"] .alert-item.info { border-right-color: #818cf8 !important; }
+    html[dir="rtl"] * { font-family: 'Inter', 'Segoe UI', Tahoma, Arial, sans-serif !important; }
+
+    /* Lang switcher + theme toggle */
+    .lang-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 600;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: #64748b; cursor: pointer; transition: all 0.18s;
+    }
+    html.light .lang-btn { border-color: rgba(0,0,0,0.1); background: rgba(0,0,0,0.04); color: #64748b; }
+    .lang-btn:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+    html.light .lang-btn:hover { background: rgba(0,0,0,0.08); color: #0f172a; }
+    .lang-btn.active { background: rgba(99,102,241,0.2); border-color: rgba(99,102,241,0.45); color: #a5b4fc; }
+    html.light .lang-btn.active { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.4); color: #4f46e5; }
+    .theme-toggle-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.05);
+      cursor: pointer; transition: all 0.2s; color: #94a3b8;
+    }
+    html.light .theme-toggle-btn { border-color: rgba(0,0,0,0.1); background: rgba(0,0,0,0.05); color: #475569; }
+    .theme-toggle-btn:hover { background: rgba(99,102,241,0.15); color: #a5b4fc; border-color: rgba(99,102,241,0.3); }
+    html.light .theme-toggle-btn:hover { background: rgba(99,102,241,0.1); color: #4f46e5; }
+
+    /* ===== CARTE LEAFLET dark mode ===== */
+    #map-dylia {
+      height: 400px;
+      border-radius: 16px;
+      overflow: hidden;
+      z-index: 0;
+    }
+    .leaflet-tile { filter: brightness(0.65) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7); }
+    .leaflet-container { background: #06060f; }
+    .leaflet-popup-content-wrapper {
+      background: #0c0c1e !important;
+      border: 1px solid rgba(99,102,241,0.35) !important;
+      color: #f1f5f9 !important;
+      border-radius: 12px !important;
+      box-shadow: 0 0 20px rgba(99,102,241,0.2) !important;
+    }
+    .leaflet-popup-tip { background: #0c0c1e !important; }
+    .leaflet-popup-content { font-family: 'Inter', sans-serif; font-size: 13px; }
+    .map-marker-pulse {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #6366f1;
+      box-shadow: 0 0 0 0 rgba(99,102,241,0.6);
+      animation: map-ping 1.8s ease-out infinite;
+    }
+    @keyframes map-ping {
+      0%   { box-shadow: 0 0 0 0 rgba(99,102,241,0.6); }
+      70%  { box-shadow: 0 0 0 14px rgba(99,102,241,0); }
+      100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); }
+    }
+
+    /* ===== AMÉLIORATION 1 : KPI sparklines ===== */
+    .kpi-sparkline-wrap { height: 32px; margin-top: 6px; }
+    .kpi-delta-pos { color: #34d399; font-size: 11px; font-weight: 600; }
+    .kpi-delta-neg { color: #f87171; font-size: 11px; font-weight: 600; }
+
+    /* ===== AMÉLIORATION 2 : Filter pills ===== */
+    .filter-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .filter-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 14px; border-radius: 99px; font-size: 12px; font-weight: 500;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: #94a3b8; cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+    }
+    .filter-pill:hover { background: rgba(255,255,255,0.08); color: #e2e8f0; }
+    .filter-pill.active {
+      background: rgba(99,102,241,0.2);
+      border-color: rgba(99,102,241,0.5);
+      color: #a5b4fc;
+    }
+    .filter-search-bar {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px; padding: 8px 14px;
+      transition: all 0.2s;
+    }
+    .filter-search-bar:focus-within {
+      border-color: rgba(99,102,241,0.4);
+      background: rgba(99,102,241,0.05);
+    }
+    .filter-search-bar input {
+      background: transparent; border: none; outline: none;
+      color: #f1f5f9; font-size: 13px; width: 100%;
+    }
+    .filter-search-bar input::placeholder { color: #475569; }
+
+    /* ===== AMÉLIORATION 3 : Alertes intelligentes ===== */
+    .alert-panel {
+      border-radius: 20px; overflow: hidden;
+    }
+    .alert-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 12px 16px;
+      border-left: 3px solid transparent;
+      transition: background 0.2s;
+    }
+    .alert-item:hover { background: rgba(255,255,255,0.03); }
+    .alert-item.danger { border-left-color: #f87171; }
+    .alert-item.warning { border-left-color: #fbbf24; }
+    .alert-item.success { border-left-color: #34d399; }
+    .alert-item.info { border-left-color: #818cf8; }
+    .alert-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      flex-shrink: 0; margin-top: 5px;
+    }
+    .alert-dot.danger { background: #f87171; }
+    .alert-dot.warning { background: #fbbf24; }
+    .alert-dot.success { background: #34d399; }
+    .alert-dot.info { background: #818cf8; }
+
+    /* ===== AMÉLIORATION 4 : Timeline 28j ===== */
+    .timeline-strip {
+      display: flex; gap: 4px; flex-wrap: wrap;
+    }
+    .tl-day {
+      width: 28px; height: 28px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 600; font-family: 'JetBrains Mono', monospace;
+      cursor: default; transition: transform 0.15s;
+      position: relative;
+    }
+    .tl-day:hover { transform: scale(1.2); z-index: 10; }
+    .tl-day.normal { background: rgba(255,255,255,0.05); color: #475569; border: 1px solid rgba(255,255,255,0.06); }
+    .tl-day.promo { background: rgba(99,102,241,0.2); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.35); }
+    .tl-day.holiday { background: rgba(248,113,113,0.15); color: #fca5a5; border: 1px solid rgba(248,113,113,0.3); }
+    .tl-day.closed { background: rgba(239,68,68,0.25); color: #fca5a5; border: 1px solid rgba(239,68,68,0.45); }
+    .tl-day.weekend { background: rgba(251,191,36,0.12); color: #fcd34d; border: 1px solid rgba(251,191,36,0.25); }
+
+    /* ===== AMÉLIORATION 5 : Sidebar rétractable ===== */
+    #app-sidebar {
+      transition: width 0.3s cubic-bezier(0.4,0,0.2,1);
+      width: 256px;
+    }
+    #app-sidebar.collapsed { width: 68px; }
+    #app-sidebar.collapsed .sidebar-label { opacity: 0; width: 0; overflow: hidden; pointer-events: none; }
+    #app-sidebar.collapsed .sidebar-logo-text { display: none; }
+    #app-sidebar.collapsed .sidebar-bottom-text { display: none; }
+    #app-sidebar.collapsed .sidebar-nav-label { display: none; }
+    #app-sidebar.collapsed .sidebar-badge { display: none; }
+    .sidebar-toggle-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      cursor: pointer; transition: all 0.2s; flex-shrink: 0;
+    }
+    .sidebar-toggle-btn:hover { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.3); }
+
+    /* ===== AMÉLIORATION 6 : Panneau What-If ===== */
+    .whatif-panel { border-radius: 20px; }
+    .whatif-day-btn {
+      width: 26px; height: 26px; border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 600; font-family: 'JetBrains Mono', monospace;
+      cursor: pointer; transition: all 0.15s;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04); color: #475569;
+    }
+    .whatif-day-btn.on {
+      background: rgba(99,102,241,0.25);
+      border-color: rgba(99,102,241,0.5);
+      color: #a5b4fc;
+    }
+    .whatif-day-btn:hover { transform: scale(1.15); }
+    .whatif-loading { animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .diff-pos { color: #34d399; }
+    .diff-neg { color: #f87171; }
+    .diff-zero { color: #64748b; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+<div id="app" class="flex min-h-screen w-full relative">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside id="app-sidebar" :class="['glass border-r border-bordercol flex flex-col justify-between shrink-0 sticky top-0 h-screen z-20', sidebarCollapsed ? 'collapsed' : '']">
+    <div>
+      <!-- Logo -->
+      <div class="p-5 border-b border-bordercol flex items-center justify-between">
+        <div class="flex items-center space-x-3 min-w-0">
+          <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-brand-600 to-purple-500 flex items-center justify-center shadow-lg shadow-brand-500/25 glow-anim shrink-0">
+            <i data-lucide="store" class="w-5 h-5 text-white"></i>
+          </div>
+          <div class="sidebar-logo-text min-w-0">
+            <h1 class="font-heading font-bold text-base leading-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent truncate">Marché de Dylia</h1>
+            <span class="text-[10px] uppercase font-semibold text-brand-500 tracking-wider">Tizi-Ouzou · Algérie</span>
+          </div>
+        </div>
+        <button @click="sidebarCollapsed=!sidebarCollapsed" class="sidebar-toggle-btn ml-2 shrink-0" :title="sidebarCollapsed?'Étendre':'Réduire'">
+          <i :data-lucide="sidebarCollapsed ? 'chevrons-right' : 'chevrons-left'" class="w-3.5 h-3.5 text-slate-400"></i>
+        </button>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="p-3 space-y-0.5">
+        <p class="sidebar-nav-label text-[9px] uppercase tracking-widest text-slate-600 font-semibold px-3 py-2">{{ t('analysis') }}</p>
+
+        <button @click="setTab('dashboard')"
+          :class="['w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white', activeTab==='dashboard'?'sidebar-active text-white':'hover:bg-white/5']"
+          :title="sidebarCollapsed?t('nav_dashboard'):''">
+          <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0"></i>
+          <span class="sidebar-label">{{ t('nav_dashboard') }}</span>
+        </button>
+
+        <button @click="setTab('predictions')"
+          :class="['w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white', activeTab==='predictions'?'sidebar-active text-white':'hover:bg-white/5']"
+          :title="sidebarCollapsed?t('nav_predictions'):''">
+          <i data-lucide="line-chart" class="w-4 h-4 shrink-0"></i>
+          <span class="sidebar-label">{{ t('nav_predictions') }}</span>
+        </button>
+
+        <button @click="setTab('market')"
+          :class="['w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white', activeTab==='market'?'sidebar-active text-white':'hover:bg-white/5']"
+          :title="sidebarCollapsed?t('nav_market'):''">
+          <i data-lucide="trending-up" class="w-4 h-4 shrink-0"></i>
+          <span class="sidebar-label">{{ t('nav_market') }}</span>
+        </button>
+
+        <button @click="setTab('promotions')"
+          :class="['w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white', activeTab==='promotions'?'sidebar-active text-white':'hover:bg-white/5']"
+          :title="sidebarCollapsed?t('nav_promotions'):''">
+          <i data-lucide="tag" class="w-4 h-4 shrink-0"></i>
+          <span class="sidebar-label">{{ t('nav_promotions') }}</span>
+        </button>
+
+        <button @click="setTab('holidays')"
+          :class="['w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white', activeTab==='holidays'?'sidebar-active text-white':'hover:bg-white/5']"
+          :title="sidebarCollapsed?t('nav_holidays'):''">
+          <i data-lucide="calendar" class="w-4 h-4 shrink-0"></i>
+          <span class="sidebar-label">{{ t('nav_holidays') }}</span>
+        </button>
+
+        <p class="sidebar-nav-label text-[9px] uppercase tracking-widest text-slate-600 font-semibold px-3 pt-4 pb-2">{{ t('model') }}</p>
+
+        <button @click="setTab('performance')"
+          :class="['w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white', activeTab==='performance'?'sidebar-active text-white':'hover:bg-white/5']"
+          :title="sidebarCollapsed?t('nav_performance'):''">
+          <i data-lucide="gauge" class="w-4 h-4 shrink-0"></i>
+          <span class="sidebar-label">{{ t('nav_performance') }}</span>
+          <span class="sidebar-badge ml-auto text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/20 text-purple-400 font-mono">0.45</span>
+        </button>
+
+        <button @click="setTab('modelisation')"
+          :class="['w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white', activeTab==='modelisation'?'sidebar-active text-white':'hover:bg-white/5']"
+          :title="sidebarCollapsed?t('nav_modelisation'):''">
+          <i data-lucide="cpu" class="w-4 h-4 shrink-0"></i>
+          <span class="sidebar-label">{{ t('nav_modelisation') }}</span>
+        </button>
+
+        <button @click="setTab('about')"
+          :class="['w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white', activeTab==='about'?'sidebar-active text-white':'hover:bg-white/5']"
+          :title="sidebarCollapsed?t('nav_about'):''">
+          <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
+          <span class="sidebar-label">{{ t('nav_about') }}</span>
+        </button>
+
+        <button @click="setTab('localisation')"
+          :class="['w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white', activeTab==='localisation'?'sidebar-active text-white':'hover:bg-white/5']"
+          :title="sidebarCollapsed?'Localisation':''">
+          <i data-lucide="map-pin" class="w-4 h-4 shrink-0"></i>
+          <span class="sidebar-label">Localisation</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- Bottom status -->
+    <div class="p-5 border-t border-bordercol space-y-3">
+      <div class="sidebar-bottom-text flex items-center justify-between text-xs text-slate-500">
+        <div class="flex items-center space-x-2">
+          <div class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
+          <span>Pipeline ML Connecté</span>
+        </div>
+        <span class="font-mono text-slate-600">v1.2</span>
+      </div>
+      <div class="sidebar-bottom-text text-[10px] text-slate-600">28 modèles LightGBM · NWRMSLE 0.4487</div>
+      <div v-if="sidebarCollapsed" class="flex justify-center">
+        <div class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="flex-1 min-w-0 flex flex-col p-8 space-y-6 overflow-y-auto">
+
+    <!-- HEADER -->
+    <header class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+      <div>
+        <h2 class="text-3xl font-heading font-bold text-white tracking-tight grad-text">{{ activeTabTitle }}</h2>
+        <p class="text-sm text-slate-400 mt-1">
+          {{ t('forecast_date') }} : <strong class="text-white font-mono">{{ kpiData.testingDate }}</strong>
+          <span class="mx-2 text-slate-600">|</span>
+          {{ t('horizon_28') }}
+        </p>
+      </div>
+      <div class="flex items-center space-x-2 flex-wrap gap-y-2">
+
+        <!-- ===== LANG SWITCHER ===== -->
+        <div class="flex items-center space-x-1 bg-white/5 border border-white/8 rounded-xl p-1">
+          <button v-for="l in langs" :key="l.code"
+            @click="setLang(l.code)"
+            :class="['lang-btn', currentLang===l.code?'active':'']"
+            :title="l.name">
+            {{ l.flag }} {{ l.code.toUpperCase() }}
+          </button>
+        </div>
+
+        <!-- ===== DARK / LIGHT TOGGLE ===== -->
+        <button @click="toggleTheme" class="theme-toggle-btn" :title="isDark ? t('light_mode') : t('dark_mode')">
+          <i :data-lucide="isDark ? 'sun' : 'moon'" class="w-4 h-4"></i>
+        </button>
+
+        <span class="glass px-3 py-1.5 rounded-full text-xs font-medium text-indigo-300 flex items-center space-x-1.5">
+          <i data-lucide="cpu" class="w-3 h-3 text-indigo-400"></i>
+          <span>28× LightGBM</span>
+        </span>
+
+        <!-- ===== BOUTON RÉSUMÉ AI ===== -->
+        <button @click="openAiSummary" id="btn-ai-summary"
+          style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:12px;font-size:13px;font-weight:600;background:linear-gradient(135deg,rgba(168,85,247,0.25),rgba(99,102,241,0.2));border:1px solid rgba(168,85,247,0.4);color:#d8b4fe;cursor:pointer;transition:all 0.2s;"
+          onmouseover="this.style.background='linear-gradient(135deg,rgba(168,85,247,0.4),rgba(99,102,241,0.3))'"
+          onmouseout="this.style.background='linear-gradient(135deg,rgba(168,85,247,0.25),rgba(99,102,241,0.2))'">
+          <i data-lucide="sparkles" class="w-4 h-4"></i>
+          <span>Résumé AI</span>
+        </button>
+
+        <!-- ===== BOUTON EXPORT PDF ===== -->
+        <button @click="exportPDF" id="btn-export-pdf"
+          style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:12px;font-size:13px;font-weight:600;background:linear-gradient(135deg,rgba(239,68,68,0.2),rgba(220,38,38,0.15));border:1px solid rgba(239,68,68,0.35);color:#fca5a5;cursor:pointer;transition:all 0.2s;"
+          onmouseover="this.style.background='linear-gradient(135deg,rgba(239,68,68,0.35),rgba(220,38,38,0.25))'"
+          onmouseout="this.style.background='linear-gradient(135deg,rgba(239,68,68,0.2),rgba(220,38,38,0.15))'">
+          <i data-lucide="file-text" class="w-4 h-4"></i>
+          <span>Export PDF</span>
+        </button>
+
+        <!-- ===== BOUTON CHATBOT ===== -->
+        <button @click="toggleChatbot" id="btn-chatbot"
+          style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:12px;font-size:13px;font-weight:600;background:linear-gradient(135deg,rgba(16,185,129,0.2),rgba(5,150,105,0.15));border:1px solid rgba(16,185,129,0.35);color:#6ee7b7;cursor:pointer;transition:all 0.2s;"
+          onmouseover="this.style.background='linear-gradient(135deg,rgba(16,185,129,0.35),rgba(5,150,105,0.25))'"
+          onmouseout="this.style.background='linear-gradient(135deg,rgba(16,185,129,0.2),rgba(5,150,105,0.15))'">
+          <i data-lucide="bot" class="w-4 h-4"></i>
+          <span>Assistant AI</span>
+        </button>
+
+        <button @click="refreshAll" id="btn-refresh"
+          class="glass px-4 py-2 rounded-xl text-sm font-medium text-white hover:bg-white/10 transition-all flex items-center space-x-2">
+          <i data-lucide="refresh-cw" class="w-4 h-4" :class="{'animate-spin': loading}"></i>
+          <span>{{ t('refresh') }}</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ERROR -->
+    <div v-if="error" class="p-4 bg-red-950/40 border border-red-900/50 rounded-2xl flex items-start space-x-3 text-red-200 text-sm">
+      <i data-lucide="alert-octagon" class="w-5 h-5 text-red-400 shrink-0"></i>
+      <div><h4 class="font-bold">Erreur</h4><p class="mt-1 text-red-300">{{ error }}</p></div>
+    </div>
+
+    <!-- ===================== TAB: DASHBOARD ===================== -->
+    <div v-if="activeTab==='dashboard'" class="space-y-6">
+
+      <!-- KPI GRID — 6 cartes avec sparklines + deltas -->
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <!-- KPI 1 -->
+        <div class="glass glass-hover p-5 rounded-2xl col-span-2 relative overflow-hidden group">
+          <div class="absolute -right-4 -bottom-4 h-20 w-20 rounded-full bg-brand-500/5 group-hover:bg-brand-500/10 transition-all duration-300"></div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{{ t('kpi_total') }}</span>
+            <div class="p-2 rounded-xl bg-indigo-500/10 text-indigo-400"><i data-lucide="shopping-bag" class="w-4 h-4"></i></div>
+          </div>
+          <div class="mt-3">
+            <span class="text-2xl font-bold font-heading text-white">{{ formatNumber(kpiData.totalForecastedSales) }}</span>
+            <span class="kpi-delta-pos ml-2">↑ +8.3%</span>
+            <div class="text-[10px] text-slate-500 mt-1">{{ t('kpi_units') }}</div>
+          </div>
+          <div class="kpi-sparkline-wrap">
+            <svg viewBox="0 0 120 32" class="w-full h-full" preserveAspectRatio="none">
+              <defs><linearGradient id="sg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6366f1" stop-opacity="0.3"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></linearGradient></defs>
+              <path d="M0,24 L15,20 L30,22 L45,14 L60,16 L75,10 L90,8 L105,5 L120,3" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+              <path d="M0,24 L15,20 L30,22 L45,14 L60,16 L75,10 L90,8 L105,5 L120,3 L120,32 L0,32 Z" fill="url(#sg1)"/>
+            </svg>
+          </div>
+        </div>
+        <!-- KPI 2 -->
+        <div class="glass glass-hover p-5 rounded-2xl relative overflow-hidden group">
+          <div class="absolute -right-4 -bottom-4 h-20 w-20 rounded-full bg-emerald-500/5 group-hover:bg-emerald-500/10 transition-all"></div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{{ t('kpi_daily') }}</span>
+            <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400"><i data-lucide="activity" class="w-4 h-4"></i></div>
+          </div>
+          <div class="mt-3">
+            <span class="text-xl font-bold font-heading text-white">{{ formatNumber(kpiData.avgDailyForecast) }}</span>
+            <div class="text-[10px] text-slate-500 mt-1">{{ t('kpi_per_day') }}</div>
+          </div>
+          <div class="kpi-sparkline-wrap">
+            <svg viewBox="0 0 60 32" class="w-full h-full" preserveAspectRatio="none">
+              <path d="M0,20 L10,18 L20,22 L30,12 L40,15 L50,10 L60,8" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+        <!-- KPI 3 -->
+        <div class="glass glass-hover p-5 rounded-2xl relative overflow-hidden group">
+          <div class="absolute -right-4 -bottom-4 h-20 w-20 rounded-full bg-amber-500/5 group-hover:bg-amber-500/10 transition-all"></div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{{ t('kpi_items') }}</span>
+            <div class="p-2 rounded-xl bg-amber-500/10 text-amber-400"><i data-lucide="box" class="w-4 h-4"></i></div>
+          </div>
+          <div class="mt-3">
+            <span class="text-xl font-bold font-heading text-white">{{ formatNumber(kpiData.uniqueItems) }}</span>
+            <div class="text-[10px] text-slate-500 mt-1">{{ t('kpi_catalog') }}</div>
+          </div>
+          <div class="kpi-sparkline-wrap">
+            <svg viewBox="0 0 60 32" class="w-full h-full" preserveAspectRatio="none">
+              <path d="M0,16 L10,16 L20,14 L30,14 L40,14 L50,12 L60,12" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+        <!-- KPI 4 — Familles -->
+        <div class="glass glass-hover p-5 rounded-2xl relative overflow-hidden group">
+          <div class="absolute -right-4 -bottom-4 h-20 w-20 rounded-full bg-sky-500/5 group-hover:bg-sky-500/10 transition-all"></div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{{ t('kpi_families') }}</span>
+            <div class="p-2 rounded-xl bg-sky-500/10 text-sky-400"><i data-lucide="layers" class="w-4 h-4"></i></div>
+          </div>
+          <div class="mt-3">
+            <span class="text-xl font-bold font-heading text-white">{{ formatNumber(kpiData.uniqueFamilies) }}</span>
+            <div class="text-[10px] text-slate-500 mt-1">{{ t('kpi_categories') }}</div>
+          </div>
+          <div class="kpi-sparkline-wrap">
+            <svg viewBox="0 0 60 32" class="w-full h-full" preserveAspectRatio="none">
+              <path d="M0,14 L12,14 L24,14 L36,12 L48,12 L60,12" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+        <!-- KPI 5 — Pétrole -->
+        <div class="glass glass-hover p-5 rounded-2xl relative overflow-hidden group">
+          <div class="absolute -right-4 -bottom-4 h-20 w-20 rounded-full bg-purple-500/5 group-hover:bg-purple-500/10 transition-all"></div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{{ t('kpi_oil') }}</span>
+            <div class="p-2 rounded-xl bg-purple-500/10 text-purple-400"><i data-lucide="droplet" class="w-4 h-4"></i></div>
+          </div>
+          <div class="mt-3">
+            <span class="text-xl font-bold font-heading text-white">{{ formatNumber(kpiData.latestOilPrice,1) }}$</span>
+            <span class="kpi-delta-neg ml-2">↓ -2.1%</span>
+            <div class="text-[10px] text-slate-500 mt-1">{{ t('kpi_wti') }}</div>
+          </div>
+          <div class="kpi-sparkline-wrap">
+            <svg viewBox="0 0 60 32" class="w-full h-full" preserveAspectRatio="none">
+              <path d="M0,8 L10,10 L20,8 L30,14 L40,16 L50,18 L60,22" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== AMÉLIORATION 3 : PANNEAU D'ALERTES INTELLIGENTES ===== -->
+      <div class="glass alert-panel p-6 rounded-3xl">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center space-x-2">
+            <i data-lucide="bell" class="w-4 h-4 text-brand-400"></i>
+            <h3 class="font-heading font-bold text-base text-white">{{ t('alerts_title') }}</h3>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 font-mono">{{ smartAlerts.length }}</span>
+          </div>
+          <button @click="refreshAlerts" class="text-xs text-slate-500 hover:text-slate-300 flex items-center space-x-1 transition-all">
+            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+            <span>{{ t('alerts_refresh') }}</span>
+          </button>
+        </div>
+        <div class="space-y-1">
+          <div v-if="smartAlerts.length===0" class="text-center py-6 text-slate-600 text-sm">
+            <i data-lucide="check-circle" class="w-8 h-8 text-slate-700 mx-auto mb-2"></i>
+            <p>{{ t('alerts_empty') }}</p>
+          </div>
+          <div v-for="alert in smartAlerts" :key="alert.id" :class="['alert-item', alert.level]">
+            <div :class="['alert-dot', alert.level]"></div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-slate-200 leading-snug">{{ alert.title }}</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">{{ alert.subtitle }}</p>
+            </div>
+            <span :class="['text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0',
+              alert.level==='danger'?'bg-red-500/10 text-red-400':
+              alert.level==='warning'?'bg-amber-500/10 text-amber-400':
+              alert.level==='success'?'bg-emerald-500/10 text-emerald-400':
+              'bg-indigo-500/10 text-indigo-400']">
+              {{ alert.tag }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts row 1 -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Global 28-day area chart -->
+        <div class="glass p-6 rounded-3xl lg:col-span-2 flex flex-col">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="font-heading font-bold text-lg text-white">Tendance Prévision Globale</h3>
+              <p class="text-xs text-slate-400">Ventes journalières prévues sur 28 jours</p>
+            </div>
+            <div class="h-2 w-2 bg-indigo-500 rounded-full animate-ping"></div>
+          </div>
+          <div id="chart-main-forecast" class="w-full min-h-[300px]"></div>
+        </div>
+
+        <!-- Top families bar -->
+        <div class="glass p-6 rounded-3xl flex flex-col">
+          <h3 class="font-heading font-bold text-lg text-white">Top 5 Familles</h3>
+          <p class="text-xs text-slate-400 mb-4">Par volume prévu</p>
+          <div id="chart-top-families" class="w-full flex-1"></div>
+        </div>
+      </div>
+
+      <!-- Charts row 2 -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- History + Forecast -->
+        <div class="glass p-6 rounded-3xl lg:col-span-2">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="font-heading font-bold text-lg text-white">Historique & Prévision</h3>
+              <p class="text-xs text-slate-400">60 derniers jours + 28 jours prévus</p>
+            </div>
+          </div>
+          <div id="chart-history-forecast" class="w-full min-h-[250px]"></div>
+        </div>
+
+        <!-- Info Projet -->
+        <div class="glass p-6 rounded-3xl flex flex-col justify-between">
+          <div>
+            <h3 class="font-heading font-bold text-lg text-white">Infos Modèle</h3>
+            <p class="text-xs text-slate-400">Métriques & contexte</p>
+          </div>
+          <div class="mt-4 space-y-2.5">
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-bordercol">
+              <div class="flex items-center space-x-2">
+                <i data-lucide="map-pin" class="w-4 h-4 text-amber-500"></i>
+                <span class="text-xs text-slate-300">Marché Cible</span>
+              </div>
+              <span class="text-xs font-bold text-amber-400">Dylia Market, Tizi-Ouzou</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-bordercol">
+              <div class="flex items-center space-x-2">
+                <i data-lucide="database" class="w-4 h-4 text-sky-500"></i>
+                <span class="text-xs text-slate-300">Dataset Proxy</span>
+              </div>
+              <span class="text-xs font-bold text-sky-400">Magasin 39, Cuenca</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-bordercol">
+              <div class="flex items-center space-x-2">
+                <i data-lucide="award" class="w-4 h-4 text-purple-500"></i>
+                <span class="text-xs text-slate-300">Score NWRMSLE</span>
+              </div>
+              <span class="text-xs font-bold text-purple-400">0.4487 (moyen)</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-bordercol">
+              <div class="flex items-center space-x-2">
+                <i data-lucide="brain-circuit" class="w-4 h-4 text-brand-500"></i>
+                <span class="text-xs text-slate-300">Modèles</span>
+              </div>
+              <span class="text-xs font-bold text-white">28 LightGBM directs</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-bordercol">
+              <div class="flex items-center space-x-2">
+                <i data-lucide="sliders-horizontal" class="w-4 h-4 text-emerald-500"></i>
+                <span class="text-xs text-slate-300">Features</span>
+              </div>
+              <span class="text-xs font-bold text-emerald-400">62 variables</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-bordercol">
+              <div class="flex items-center space-x-2">
+                <i data-lucide="tag" class="w-4 h-4 text-rose-500"></i>
+                <span class="text-xs text-slate-300">Lift Promo</span>
+              </div>
+              <span class="text-xs font-bold text-rose-400">+{{ formatNumber(promoData.promoLift ? promoData.promoLift.liftPercentage : 0,1) }}%</span>
+            </div>
+          </div>
+          <!-- NWRMSLE sparkline -->
+          <div class="mt-4 border-t border-bordercol/30 pt-3">
+            <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+              <span>NWRMSLE par horizon (J1→J28)</span>
+              <span class="text-purple-400 font-mono font-bold text-xs">0.389–0.512</span>
+            </div>
+            <div id="chart-nwrmsle" class="h-[50px] w-full"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===================== TAB: PREDICTIONS EXPLORER ===================== -->
+    <div v-if="activeTab==='predictions'" class="space-y-6">
+
+      <!-- Filters — version pills + barre de recherche -->
+      <div class="glass p-6 rounded-3xl space-y-4">
+        <!-- Search bar -->
+        <div class="filter-search-bar">
+          <i data-lucide="search" class="w-4 h-4 text-slate-500 shrink-0"></i>
+          <input v-model.number="filters.item_nbr" type="number" :placeholder="t('filter_search')"
+            @input="debouncedFetchPredictions">
+          <button v-if="filters.item_nbr" @click="filters.item_nbr=null;fetchPredictions(true)" class="text-slate-500 hover:text-slate-300 transition-all">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+
+        <!-- Famille pills -->
+        <div>
+          <p class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-2">{{ t('filter_family') }}</p>
+          <div class="filter-pills">
+            <button @click="filters.family='';fetchPredictions(true)"
+              :class="['filter-pill', filters.family===''?'active':'']">
+              <i data-lucide="layers" class="w-3 h-3"></i> {{ t('filter_all') }}
+            </button>
+            <button v-for="fam in families" :key="fam"
+              @click="filters.family=fam;fetchPredictions(true)"
+              :class="['filter-pill', filters.family===fam?'active':'']">
+              {{ fam }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Perishable + actions -->
+        <div class="flex flex-wrap items-center gap-3 pt-2 border-t border-bordercol/30">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{{ t('filter_perishable') }}</p>
+          <button @click="filters.perishable='';fetchPredictions(true)"
+            :class="['filter-pill', filters.perishable===''?'active':'']">Tous</button>
+          <button @click="filters.perishable='1';fetchPredictions(true)"
+            :class="['filter-pill', filters.perishable==='1'?'active':'']">
+            <i data-lucide="leaf" class="w-3 h-3"></i> Périsable
+          </button>
+          <button @click="filters.perishable='0';fetchPredictions(true)"
+            :class="['filter-pill', filters.perishable==='0'?'active':'']">Non-périsable</button>
+
+          <div class="ml-auto flex space-x-2">
+            <button @click="resetFilters" class="glass px-4 py-2 rounded-xl text-xs font-medium hover:bg-white/10 transition-all text-slate-400 hover:text-white flex items-center space-x-1.5">
+              <i data-lucide="x-circle" class="w-3.5 h-3.5"></i>
+              <span>{{ t('filter_reset') }}</span>
+            </button>
+            <button @click="exportCSV" id="btn-export-csv"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-xs font-medium shadow-md shadow-brand-500/10 flex items-center space-x-2 transition-all">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span>{{ t('export_csv') }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Table -->
+        <div class="glass p-6 rounded-3xl lg:col-span-2 flex flex-col">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-slate-400">
+              <thead class="text-xs uppercase text-slate-500 border-b border-bordercol font-heading">
+                <tr>
+                  <th class="py-3 px-4">Item ID</th>
+                  <th class="py-3 px-4">Famille</th>
+                  <th class="py-3 px-4 text-center">Poids</th>
+                  <th class="py-3 px-4 text-right">Total Prévu (28j)</th>
+                  <th class="py-3 px-4 text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-bordercol/30">
+                <tr v-if="loading" v-for="i in 8" :key="'s'+i" class="animate-pulse">
+                  <td class="py-4 px-4"><div class="h-4 bg-white/5 rounded w-16"></div></td>
+                  <td class="py-4 px-4"><div class="h-4 bg-white/5 rounded w-28"></div></td>
+                  <td class="py-4 px-4 text-center"><div class="h-4 bg-white/5 rounded w-8 mx-auto"></div></td>
+                  <td class="py-4 px-4 text-right"><div class="h-4 bg-white/5 rounded w-20 ml-auto"></div></td>
+                  <td class="py-4 px-4 text-center"><div class="h-6 bg-white/5 rounded w-16 mx-auto"></div></td>
+                </tr>
+                <tr v-else-if="predictions.length===0">
+                  <td colspan="5" class="py-12 text-center text-slate-500">Aucun résultat</td>
+                </tr>
+                <tr v-else v-for="item in predictions" :key="item.item_nbr"
+                  @click="selectItem(item)"
+                  :class="['hover:bg-white/5 cursor-pointer transition-all border-l-2', selectedItem&&selectedItem.item_nbr===item.item_nbr?'border-brand-500 bg-white/5 text-white':'border-transparent']">
+                  <td class="py-3 px-4 font-mono font-medium text-slate-300">{{ item.item_nbr }}</td>
+                  <td class="py-3 px-4"><span class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 font-medium">{{ item.family }}</span></td>
+                  <td class="py-3 px-4 text-center">
+                    <span v-if="item.perishable" class="badge bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      <i data-lucide="leaf" class="w-3 h-3"></i> P
+                    </span>
+                    <span v-else class="text-xs text-slate-600 font-medium">—</span>
+                  </td>
+                  <td class="py-3 px-4 text-right font-bold text-white">{{ formatNumber(item.total) }}</td>
+                  <td class="py-3 px-4 text-center">
+                    <button class="text-xs text-indigo-400 hover:text-indigo-300 font-medium px-2 py-1 rounded-lg hover:bg-indigo-500/10 transition-all">
+                      Visualiser
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Pagination -->
+          <div v-if="!loading && totalPredictions>0" class="flex items-center justify-between border-t border-bordercol mt-6 pt-4 text-xs text-slate-500">
+            <div>
+              Affichage <strong class="text-white">{{ offset+1 }}</strong>–<strong class="text-white">{{ Math.min(offset+limit, totalPredictions) }}</strong>
+              sur <strong class="text-white">{{ totalPredictions }}</strong> articles
+            </div>
+            <div class="flex items-center space-x-2">
+              <button @click="changePage(-1)" :disabled="offset===0"
+                class="glass px-3 py-1.5 rounded-lg hover:bg-white/10 disabled:opacity-40 transition-all font-semibold">Préc.</button>
+              <button @click="changePage(1)" :disabled="offset+limit>=totalPredictions"
+                class="glass px-3 py-1.5 rounded-lg hover:bg-white/10 disabled:opacity-40 transition-all font-semibold">Suiv.</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Item detail panel + What-If -->
+        <div class="glass p-6 rounded-3xl flex flex-col space-y-4">
+          <div v-if="selectedItem">
+            <div class="border-b border-bordercol pb-4 mb-4">
+              <span class="text-xs uppercase tracking-wider text-brand-500 font-semibold">{{ t('detail_title') }}</span>
+              <h3 class="text-xl font-heading font-bold text-white mt-1">Article #{{ selectedItem.item_nbr }}</h3>
+              <div class="flex items-center flex-wrap gap-2 mt-2">
+                <span class="badge bg-slate-800 text-slate-300 border border-bordercol">{{ selectedItem.family }}</span>
+                <span class="badge bg-slate-800 text-slate-400 border border-bordercol">Classe {{ selectedItem.class }}</span>
+                <span v-if="selectedItem.perishable" class="badge bg-amber-500/15 text-amber-400 border border-amber-500/20">
+                  <i data-lucide="leaf" class="w-3 h-3"></i> Périsable (×1.5)
+                </span>
+              </div>
+            </div>
+
+            <!-- Stats grid -->
+            <div class="grid grid-cols-3 gap-2 mb-4">
+              <div class="p-3 bg-white/5 rounded-xl border border-bordercol text-center">
+                <span class="text-[9px] text-slate-400 block uppercase">7j</span>
+                <span class="text-base font-bold text-white">{{ itemDetails ? formatNumber(itemDetails.logistics.sales_7d,1) : '…' }}</span>
+              </div>
+              <div class="p-3 bg-white/5 rounded-xl border border-bordercol text-center">
+                <span class="text-[9px] text-slate-400 block uppercase">14j</span>
+                <span class="text-base font-bold text-white">{{ itemDetails ? formatNumber(itemDetails.logistics.sales_14d,1) : '…' }}</span>
+              </div>
+              <div class="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-center">
+                <span class="text-[9px] text-indigo-400 block uppercase">28j</span>
+                <span class="text-base font-bold text-indigo-300">{{ itemDetails ? formatNumber(itemDetails.logistics.sales_28d,1) : '…' }}</span>
+              </div>
+            </div>
+
+            <!-- Logistics -->
+            <div v-if="itemDetails" class="space-y-2 mb-4">
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-emerald-500/5 border border-emerald-500/15">
+                <div class="flex items-center space-x-2">
+                  <i data-lucide="package" class="w-3.5 h-3.5 text-emerald-500"></i>
+                  <span class="text-xs text-slate-300">{{ t('stock_suggest') }}</span>
+                </div>
+                <span class="text-xs font-bold text-emerald-400">{{ formatNumber(itemDetails.logistics.suggested_stock,1) }} u.</span>
+              </div>
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-amber-500/5 border border-amber-500/15">
+                <div class="flex items-center space-x-2">
+                  <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-amber-500"></i>
+                  <span class="text-xs text-slate-300">{{ t('reorder_point') }}</span>
+                </div>
+                <span class="text-xs font-bold text-amber-400">{{ formatNumber(itemDetails.logistics.reorder_point,1) }} u.</span>
+              </div>
+            </div>
+
+            <!-- Chart 28j -->
+            <div class="w-full">
+              <h4 class="text-xs font-semibold text-slate-300 mb-2 flex justify-between">
+                <span>Historique (30j) & Prévision (28j)</span>
+                <span class="text-[10px] text-slate-500 font-normal">Unités vendues</span>
+              </h4>
+              <div id="chart-item-detail"></div>
+            </div>
+
+            <!-- ===== AMÉLIORATION 4 : TIMELINE 28J ===== -->
+            <div v-if="itemDetails" class="mt-4">
+              <h4 class="text-xs font-semibold text-slate-300 mb-2 flex items-center space-x-2">
+                <span>{{ t('timeline_title') }}</span>
+                <div class="flex items-center space-x-3 ml-auto">
+                  <span class="flex items-center space-x-1 text-[9px] text-indigo-400"><span class="w-2.5 h-2.5 rounded-sm bg-indigo-500/30 inline-block border border-indigo-500/40"></span>Promo</span>
+                  <span class="flex items-center space-x-1 text-[9px] text-red-400"><span class="w-2.5 h-2.5 rounded-sm bg-red-500/20 inline-block border border-red-500/30"></span>Férié</span>
+                  <span class="flex items-center space-x-1 text-[9px] text-amber-400"><span class="w-2.5 h-2.5 rounded-sm bg-amber-500/15 inline-block border border-amber-500/25"></span>Week-end</span>
+                </div>
+              </h4>
+              <div class="timeline-strip">
+                <div v-for="(day, i) in timeline28" :key="i"
+                  :class="['tl-day', day.cls]"
+                  :title="'J+'+(i+1)+' — '+day.label">
+                  {{ i+1 }}
+                </div>
+              </div>
+            </div>
+
+            <!-- ===== AMÉLIORATION 6 : PANNEAU WHAT-IF ===== -->
+            <div v-if="itemDetails" class="mt-5 p-4 rounded-2xl bg-indigo-950/25 border border-indigo-900/30">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-xs font-semibold text-indigo-300 flex items-center space-x-2">
+                  <i data-lucide="zap" class="w-3.5 h-3.5 text-indigo-400"></i>
+                  <span>{{ t('whatif_title') }}</span>
+                </h4>
+                <div class="flex items-center space-x-2">
+                  <button @click="toggleAllPromos(true)" class="text-[10px] text-indigo-400 hover:text-indigo-200 transition-all">{{ t('whatif_all_on') }}</button>
+                  <span class="text-slate-600 text-[10px]">|</span>
+                  <button @click="toggleAllPromos(false)" class="text-[10px] text-slate-500 hover:text-slate-300 transition-all">{{ t('whatif_all_off') }}</button>
+                </div>
+              </div>
+              <p class="text-[10px] text-slate-500 mb-3">{{ t('whatif_desc') }}</p>
+              <div class="flex flex-wrap gap-1.5 mb-4">
+                <button v-for="(p, i) in simulPromos" :key="i"
+                  @click="simulPromos[i]=!simulPromos[i]"
+                  :class="['whatif-day-btn', simulPromos[i]?'on':'']">
+                  {{ i+1 }}
+                </button>
+              </div>
+              <div class="flex items-center space-x-3">
+                <button @click="runSimulation"
+                  :disabled="simulLoading"
+                  class="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center space-x-2 transition-all">
+                  <i :data-lucide="simulLoading?'loader':'play'" class="w-3.5 h-3.5" :class="simulLoading?'animate-spin':''"></i>
+                  <span>{{ simulLoading ? t('whatif_loading') : t('whatif_simulate') }}</span>
+                </button>
+                <div v-if="simulResult !== null" class="flex items-center space-x-2 flex-1">
+                  <div class="flex-1 h-1.5 rounded-full bg-white/10">
+                    <div class="h-full rounded-full transition-all duration-700"
+                      :style="{width: Math.min(Math.abs(simulDiffPct)/20*100,100)+'%',
+                        background: simulDiffPct>=0?'#34d399':'#f87171'}">
+                    </div>
+                  </div>
+                  <span :class="['text-xs font-bold', simulDiffPct>=0?'diff-pos':'diff-neg']">
+                    {{ simulDiffPct>=0?'+':'' }}{{ simulDiffPct.toFixed(1) }}%
+                  </span>
+                  <span class="text-[10px] text-slate-500">{{ t('whatif_vs') }}</span>
+                </div>
+              </div>
+              <p v-if="simulError" class="text-[10px] text-red-400 mt-2">{{ simulError }}</p>
+            </div>
+
+          </div>
+          <div v-else class="h-full flex flex-col items-center justify-center text-slate-500 text-center py-20">
+            <i data-lucide="mouse-pointer-click" class="w-10 h-10 text-slate-700 mb-3"></i>
+            <p class="text-sm">{{ t('detail_select') }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== TAB: MARKET ===================== -->
+    <div v-if="activeTab==='market'" class="space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="glass p-6 rounded-3xl lg:col-span-2">
+          <h3 class="font-heading font-bold text-lg text-white">Transactions vs. Prix du Pétrole</h3>
+          <p class="text-xs text-slate-400 mb-4">Corrélation volume local / valeur énergie WTI</p>
+          <div id="chart-market-oil-transactions" class="w-full min-h-[350px]"></div>
+        </div>
+
+        <div class="glass p-6 rounded-3xl flex flex-col justify-between">
+          <div>
+            <h3 class="font-heading font-bold text-lg text-white">Analyse de Corrélation</h3>
+            <p class="text-xs text-slate-400">Facteurs macroéconomiques</p>
+          </div>
+          <div class="mt-6 space-y-5">
+            <div>
+              <div class="flex items-center justify-between text-xs text-slate-300 mb-1.5">
+                <span>Impact prix pétrole</span>
+                <span class="text-emerald-400 font-semibold">Inverse stable</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill bg-gradient-to-r from-emerald-500 to-indigo-500 w-[45%]"></div>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-2">Le prix du baril WTI influence les revenus de l'État équatorien (exportateur pétrole) et le pouvoir d'achat.</p>
+            </div>
+            <div>
+              <div class="flex items-center justify-between text-xs text-slate-300 mb-1.5">
+                <span>Saisonnalité transactions</span>
+                <span class="text-indigo-400 font-semibold">Très élevée</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill bg-indigo-500 w-[85%]"></div>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-2">Forte corrélation entre le trafic journalier et les ventes globales, accentuée les week-ends.</p>
+            </div>
+            <div>
+              <div class="flex items-center justify-between text-xs text-slate-300 mb-1.5">
+                <span>Effet début/fin de mois</span>
+                <span class="text-amber-400 font-semibold">Modéré</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill bg-amber-500 w-[60%]"></div>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-2">Pics de ventes identifiés autour des jours de paie (is_month_start, is_month_end).</p>
+            </div>
+          </div>
+          <div class="p-4 rounded-xl bg-indigo-950/20 border border-indigo-900/40 text-[11px] text-indigo-300 leading-normal mt-6">
+            💡 <strong>Note modèle :</strong> 6 features pétrole (lags + moyennes glissantes 7/30j + variation 7j) + 8 features transactions capturent ces dynamiques.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== TAB: PROMOTIONS ===================== -->
+    <div v-if="activeTab==='promotions'" class="space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="glass p-6 rounded-3xl text-center flex flex-col justify-center items-center py-10">
+          <div class="p-4 rounded-full bg-brand-500/10 text-brand-500 mb-4">
+            <i data-lucide="tag" class="w-10 h-10"></i>
+          </div>
+          <h3 class="text-xl font-heading font-bold text-white">Lift Promo Historique</h3>
+          <p class="text-sm text-slate-400 mt-1">Efficacité moyenne observée</p>
+          <div class="text-5xl font-extrabold font-heading text-emerald-400 mt-6 animate-pulse">
+            +{{ formatNumber(promoData.promoLift ? promoData.promoLift.liftPercentage : 0,1) }}%
+          </div>
+          <p class="text-xs text-slate-500 mt-2">Hausse moyenne des ventes unitaires lors d'une promotion</p>
+          <div class="grid grid-cols-2 gap-4 w-full mt-8 border-t border-bordercol/30 pt-6">
+            <div>
+              <span class="text-[10px] uppercase text-slate-500 block">Avec promo</span>
+              <span class="text-lg font-bold text-white">{{ formatNumber(promoData.promoLift ? promoData.promoLift.avgSalesPromo : 0,1) }}</span>
+            </div>
+            <div>
+              <span class="text-[10px] uppercase text-slate-500 block">Sans promo</span>
+              <span class="text-lg font-bold text-slate-400">{{ formatNumber(promoData.promoLift ? promoData.promoLift.avgSalesNoPromo : 0,1) }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="glass p-6 rounded-3xl lg:col-span-2">
+          <h3 class="font-heading font-bold text-lg text-white">Taux de Promotion par Famille</h3>
+          <p class="text-xs text-slate-400 mb-4">Top 10 familles actives (historique)</p>
+          <div id="chart-promo-distribution" class="w-full min-h-[300px]"></div>
+        </div>
+      </div>
+      <div class="glass p-6 rounded-3xl">
+        <h3 class="font-heading font-bold text-lg text-white">Volume Promos Prévues (28j)</h3>
+        <p class="text-xs text-slate-400 mb-4">Nombre d'articles en promo par jour sur la période prévisionnelle</p>
+        <div id="chart-upcoming-promo-timeline" class="w-full min-h-[250px]"></div>
+      </div>
+    </div>
+
+    <!-- ===================== TAB: HOLIDAYS ===================== -->
+    <div v-if="activeTab==='holidays'" class="space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="glass p-6 rounded-3xl lg:col-span-2">
+          <h3 class="font-heading font-bold text-lg text-white">Calendrier Jours Fériés & Événements</h3>
+          <p class="text-xs text-slate-400 mb-6">Historique récent + 28j prévision</p>
+          <div class="space-y-3">
+            <div v-for="day in holidays" :key="day.date"
+              :class="['p-4 rounded-2xl flex items-center justify-between border', day.is_past?'bg-slate-900/30 border-bordercol text-slate-400':'bg-brand-900/10 border-brand-500/20 text-white']">
+              <div class="flex items-center space-x-3">
+                <div :class="['p-2 rounded-xl text-xs font-bold uppercase font-mono', day.is_past?'bg-slate-800 text-slate-500':'bg-brand-500/10 text-brand-400']">
+                  {{ day.date.substring(5) }}
+                </div>
+                <div>
+                  <h4 class="font-heading font-bold" :class="day.is_past?'text-slate-400':'text-white'">
+                    Férié {{ day.type }}
+                  </h4>
+                  <span class="text-[10px] text-slate-500">{{ day.date }}</span>
+                </div>
+              </div>
+              <div class="flex items-center space-x-2">
+                <span v-if="day.is_likely_closed" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">Fermé</span>
+                <span v-else class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400">Ouvert</span>
+                <span :class="['text-xs px-2.5 py-0.5 rounded-full font-medium', day.is_past?'bg-slate-950 text-slate-600':'bg-indigo-500 text-white']">
+                  {{ day.is_past ? 'Passé' : 'Dans '+day.days_offset+' j.' }}
+                </span>
+              </div>
+            </div>
+            <div v-if="holidays.length===0" class="text-center py-10 text-slate-500">Aucun férié identifié sur cette période.</div>
+          </div>
+        </div>
+
+        <div class="glass p-6 rounded-3xl flex flex-col justify-between">
+          <div>
+            <h3 class="font-heading font-bold text-lg text-white">Impact & Modélisation</h3>
+            <p class="text-xs text-slate-400">Traitement par le pipeline</p>
+          </div>
+          <div class="space-y-4 my-6">
+            <div class="p-4 rounded-xl bg-white/5 border border-bordercol">
+              <span class="text-xs font-bold text-slate-200 block mb-1">Jours de fermeture</span>
+              <p class="text-[11px] text-slate-400 leading-normal">
+                Certains jours (Noël, Jour de l'An) sont marqués <span class="text-red-400 font-mono">is_likely_closed=1</span>. Les prévisions sont automatiquement forcées à 0.
+              </p>
+            </div>
+            <div class="p-4 rounded-xl bg-white/5 border border-bordercol">
+              <span class="text-xs font-bold text-slate-200 block mb-1">Proximité aux fériés</span>
+              <p class="text-[11px] text-slate-400 leading-normal">
+                Les variables <span class="text-brand-400 font-mono">days_since_last_holiday</span> et <span class="text-brand-400 font-mono">days_to_next_holiday</span> capturent les achats anticipatoires et de rattrapage.
+              </p>
+            </div>
+            <div class="p-4 rounded-xl bg-white/5 border border-bordercol">
+              <span class="text-xs font-bold text-slate-200 block mb-1">Features futures connues</span>
+              <p class="text-[11px] text-slate-400 leading-normal">
+                Les attributs <span class="text-emerald-400 font-mono">Future_is_Holiday</span>, <span class="text-emerald-400 font-mono">Future_is_National</span> etc. sont calculés à l'avance pour chaque horizon h=1→28.
+              </p>
+            </div>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-900/50 border border-bordercol/30 text-xs text-slate-500 leading-normal">
+            📌 <strong>Note :</strong> Filtrage géographique strict : seuls les fériés applicables à l'Équateur (national) et Cuenca (local) ont été retenus.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== TAB: PERFORMANCE ===================== -->
+    <div v-if="activeTab==='performance'" class="space-y-6">
+
+      <!-- 3 résumé KPIs -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="glass glass-hover p-6 rounded-2xl text-center">
+          <div class="text-xs uppercase tracking-wider text-emerald-400 font-semibold mb-2">Erreur minimale</div>
+          <div class="text-4xl font-heading font-extrabold text-emerald-400">0.3886</div>
+          <div class="text-xs text-slate-500 mt-2">Jour 1 — prévision J+1</div>
+        </div>
+        <div class="glass glass-hover p-6 rounded-2xl text-center">
+          <div class="text-xs uppercase tracking-wider text-purple-400 font-semibold mb-2">Score moyen global</div>
+          <div class="text-4xl font-heading font-extrabold text-purple-400">0.4487</div>
+          <div class="text-xs text-slate-500 mt-2">NWRMSLE moyenné sur 28 horizons</div>
+        </div>
+        <div class="glass glass-hover p-6 rounded-2xl text-center">
+          <div class="text-xs uppercase tracking-wider text-amber-400 font-semibold mb-2">Erreur maximale</div>
+          <div class="text-4xl font-heading font-extrabold text-amber-400">0.5121</div>
+          <div class="text-xs text-slate-500 mt-2">Jour 26 — horizon ~4 semaines</div>
+        </div>
+      </div>
+
+      <!-- Chart NWRMSLE détaillé + tableau -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="glass p-6 rounded-3xl lg:col-span-2">
+          <h3 class="font-heading font-bold text-lg text-white">NWRMSLE par Horizon de Prévision</h3>
+          <p class="text-xs text-slate-400 mb-4">Performance de chacun des 28 modèles LightGBM sur le jeu de test (17/07–15/08/2017)</p>
+          <div id="chart-nwrmsle-detailed" class="w-full min-h-[320px]"></div>
+        </div>
+
+        <!-- Analyse textuelle -->
+        <div class="glass p-6 rounded-3xl flex flex-col justify-between">
+          <div>
+            <h3 class="font-heading font-bold text-lg text-white">Analyse des Résultats</h3>
+            <p class="text-xs text-slate-400 mb-4">Interprétation de la distribution des erreurs</p>
+          </div>
+          <div class="space-y-4">
+            <div class="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/15">
+              <div class="flex items-center space-x-2 mb-1">
+                <i data-lucide="trending-down" class="w-4 h-4 text-emerald-500"></i>
+                <span class="text-xs font-bold text-emerald-400">Gradient croissant</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-normal">Les erreurs les plus faibles se concentrent sur les premiers jours (J1: 0.389, J2: 0.396). La prévision court terme bénéficie d'un historique récent plus informatif.</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-indigo-500/5 border border-indigo-500/15">
+              <div class="flex items-center space-x-2 mb-1">
+                <i data-lucide="minus" class="w-4 h-4 text-indigo-400"></i>
+                <span class="text-xs font-bold text-indigo-400">Stabilisation J8–J21</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-normal">Entre J8 et J21, les erreurs se stabilisent autour de 0.44–0.47, indiquant que les modèles capturent correctement les dynamiques à moyen terme.</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/15">
+              <div class="flex items-center space-x-2 mb-1">
+                <i data-lucide="alert-circle" class="w-4 h-4 text-amber-400"></i>
+                <span class="text-xs font-bold text-amber-400">Légère dégradation J25–J27</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-normal">Les jours 25–27 montrent des erreurs légèrement supérieures (0.487–0.512), cohérentes avec la difficulté croissante à 4 semaines.</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-purple-500/5 border border-purple-500/15">
+              <div class="flex items-center space-x-2 mb-1">
+                <i data-lucide="check-circle" class="w-4 h-4 text-purple-400"></i>
+                <span class="text-xs font-bold text-purple-400">Pas d'explosion d'erreur</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-normal">Contrairement à l'approche récursive, l'approche directe maintient les erreurs dans une plage étroite <strong class="text-white">0.39–0.51</strong>.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tableau complet NWRMSLE -->
+      <div class="glass p-6 rounded-3xl">
+        <h3 class="font-heading font-bold text-lg text-white mb-4">Tableau Complet des Erreurs par Horizon</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-xs text-slate-500 uppercase border-b border-bordercol">
+                <th v-for="h in nwrmsleErrors" :key="h.day" class="py-2 px-3 text-center">J{{ h.day }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td v-for="h in nwrmsleErrors" :key="h.day" class="py-3 px-3 text-center font-mono font-semibold text-sm"
+                  :class="h.error < 0.41 ? 'nw-low' : h.error < 0.47 ? 'nw-mid' : 'nw-high'">
+                  {{ h.error }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="flex items-center space-x-6 mt-4 text-xs text-slate-500">
+          <div class="flex items-center space-x-1.5"><div class="w-3 h-3 rounded-full bg-emerald-400"></div><span>Bonne (&lt; 0.41)</span></div>
+          <div class="flex items-center space-x-1.5"><div class="w-3 h-3 rounded-full bg-amber-400"></div><span>Modérée (0.41–0.47)</span></div>
+          <div class="flex items-center space-x-1.5"><div class="w-3 h-3 rounded-full bg-red-400"></div><span>Élevée (&gt; 0.47)</span></div>
+        </div>
+      </div>
+
+      <!-- Taille du jeu de test -->
+      <div class="glass p-5 rounded-2xl flex items-center space-x-4">
+        <div class="p-3 rounded-xl bg-brand-500/10">
+          <i data-lucide="database" class="w-5 h-5 text-brand-400"></i>
+        </div>
+        <div>
+          <p class="text-sm text-white font-semibold">Évaluation : 172 480 prédictions totales</p>
+          <p class="text-xs text-slate-400">6 160 articles × 28 horizons — Période de test : 17/07/2017 → 15/08/2017 (30 jours réels)</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== TAB: MODÉLISATION ===================== -->
+    <div v-if="activeTab==='modelisation'" class="space-y-6">
+
+      <!-- Approche directe vs récursive -->
+      <div class="glass p-6 rounded-3xl">
+        <h3 class="font-heading font-bold text-xl text-white mb-1">Approche de Modélisation</h3>
+        <p class="text-xs text-slate-400 mb-6">Prévision multi-horizons directe (DIRECT) — 28 modèles LightGBM indépendants</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="approach-card border-slate-700/50">
+            <div class="flex items-center space-x-2 mb-3">
+              <div class="p-1.5 rounded-lg bg-slate-700/50"><i data-lucide="repeat" class="w-4 h-4 text-slate-400"></i></div>
+              <span class="font-heading font-bold text-slate-300">Récursive (MIMO)</span>
+            </div>
+            <p class="text-[11px] text-slate-400 leading-normal">Un seul modèle. La prédiction h+1 alimente h+2. <span class="text-red-400">❌ Accumulation d'erreur sur l'horizon.</span></p>
+          </div>
+          <div class="approach-card border-brand-500/30 bg-brand-500/5">
+            <div class="flex items-center space-x-2 mb-3">
+              <div class="p-1.5 rounded-lg bg-brand-500/20"><i data-lucide="layers" class="w-4 h-4 text-brand-400"></i></div>
+              <span class="font-heading font-bold text-white">Directe ✓ (DIRECT)</span>
+              <span class="badge bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 text-[9px]">CHOISI</span>
+            </div>
+            <p class="text-[11px] text-slate-300 leading-normal">Un modèle indépendant par horizon h. <span class="text-emerald-400">✅ Pas d'accumulation d'erreur. Optimal par horizon.</span></p>
+          </div>
+          <div class="approach-card border-slate-700/50">
+            <div class="flex items-center space-x-2 mb-3">
+              <div class="p-1.5 rounded-lg bg-slate-700/50"><i data-lucide="git-merge" class="w-4 h-4 text-slate-400"></i></div>
+              <span class="font-heading font-bold text-slate-300">DirRec (Hybride)</span>
+            </div>
+            <p class="text-[11px] text-slate-400 leading-normal">Hybride entre récursive et directe. Compromis mais complexité accrue.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Optuna config -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="glass p-6 rounded-3xl lg:col-span-2">
+          <h3 class="font-heading font-bold text-lg text-white mb-1">Optimisation Bayésienne — Optuna</h3>
+          <p class="text-xs text-slate-400 mb-5">Configuration de la recherche d'hyperparamètres (1 400 évaluations totales)</p>
+
+          <div class="grid grid-cols-2 gap-4 mb-5">
+            <div class="p-4 rounded-xl bg-white/5 border border-bordercol">
+              <div class="text-[10px] uppercase text-slate-500 mb-1">Sampler</div>
+              <div class="text-sm font-bold text-white">TPE Multivarié</div>
+              <div class="text-[10px] text-slate-500 mt-1">Tree-structured Parzen Estimator (seed=42)</div>
+            </div>
+            <div class="p-4 rounded-xl bg-white/5 border border-bordercol">
+              <div class="text-[10px] uppercase text-slate-500 mb-1">Pruner</div>
+              <div class="text-sm font-bold text-white">MedianPruner</div>
+              <div class="text-[10px] text-slate-500 mt-1">n_startup=5, n_warmup=30 steps</div>
+            </div>
+            <div class="p-4 rounded-xl bg-white/5 border border-bordercol">
+              <div class="text-[10px] uppercase text-slate-500 mb-1">Trials par modèle</div>
+              <div class="text-sm font-bold text-indigo-400">50 essais × 28 modèles</div>
+              <div class="text-[10px] text-slate-500 mt-1">= 1 400 évaluations totales</div>
+            </div>
+            <div class="p-4 rounded-xl bg-white/5 border border-bordercol">
+              <div class="text-[10px] uppercase text-slate-500 mb-1">Objectif</div>
+              <div class="text-sm font-bold text-emerald-400">Minimisation NWRMSLE</div>
+              <div class="text-[10px] text-slate-500 mt-1">Sur ensemble de validation</div>
+            </div>
+          </div>
+
+          <h4 class="text-sm font-bold text-white mb-3">Hyperparamètres explorés</h4>
+          <div class="space-y-2">
+            <div v-for="hp in hyperparams" :key="hp.name" class="flex items-center space-x-3 text-xs">
+              <span class="font-mono text-brand-400 w-40 shrink-0">{{ hp.name }}</span>
+              <div class="progress-bar flex-1">
+                <div class="progress-fill" :style="{width: hp.fill+'%', background: hp.color}"></div>
+              </div>
+              <span class="text-slate-400 w-32 shrink-0 text-right">{{ hp.range }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Split Train/Val/Test -->
+        <div class="glass p-6 rounded-3xl">
+          <h3 class="font-heading font-bold text-lg text-white mb-4">Découpage Temporel</h3>
+          <div class="space-y-3">
+            <div class="p-3.5 rounded-xl bg-sky-500/5 border border-sky-500/20">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-sky-400">Train</span>
+                <span class="badge bg-sky-500/10 text-sky-400 border border-sky-500/20">Entraînement</span>
+              </div>
+              <div class="text-[11px] text-slate-300 font-mono">18/10/2016 → 16/06/2017</div>
+              <p class="text-[10px] text-slate-500 mt-1">Entraînement 28 modèles LightGBM</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-amber-400">Validation</span>
+                <span class="badge bg-amber-500/10 text-amber-400 border border-amber-500/20">Optuna</span>
+              </div>
+              <div class="text-[11px] text-slate-300 font-mono">17/06/2017 → 16/07/2017</div>
+              <p class="text-[10px] text-slate-500 mt-1">Évaluation NWRMSLE pendant Optuna</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-red-500/5 border border-red-500/20">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-red-400">Test</span>
+                <span class="badge bg-red-500/10 text-red-400 border border-red-500/20">Évaluation</span>
+              </div>
+              <div class="text-[11px] text-slate-300 font-mono">17/07/2017 → 15/08/2017</div>
+              <p class="text-[10px] text-slate-500 mt-1">Évaluation finale — 30 jours réels</p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-emerald-400">Full Train (T+V)</span>
+                <span class="badge bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Déploiement</span>
+              </div>
+              <div class="text-[11px] text-slate-300 font-mono">18/10/2016 → 16/07/2017</div>
+              <p class="text-[10px] text-slate-500 mt-1">Entraînement final — modèles déployés</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Features 62 variables -->
+      <div class="glass p-6 rounded-3xl">
+        <h3 class="font-heading font-bold text-xl text-white mb-1">Ingénierie des Features</h3>
+        <p class="text-xs text-slate-400 mb-6">62 variables prédictives réparties en 8 familles — construites à partir du dataset maître</p>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div v-for="fam in featureFamilies" :key="fam.name" class="feat-card">
+            <div class="flex items-center space-x-2 mb-3">
+              <div class="p-2 rounded-xl" :style="{background: fam.color+'20'}">
+                <i :data-lucide="fam.icon" class="w-4 h-4" :style="{color: fam.color}"></i>
+              </div>
+              <span class="text-sm font-bold text-white">{{ fam.name }}</span>
+            </div>
+            <div class="text-2xl font-heading font-extrabold mb-1" :style="{color: fam.color}">{{ fam.count }}</div>
+            <div class="progress-bar mb-2">
+              <div class="progress-fill" :style="{width: (fam.count/62*100*2.5)+'%', background: fam.color, maxWidth:'100%'}"></div>
+            </div>
+            <p class="text-[10px] text-slate-500 leading-normal">{{ fam.desc }}</p>
+          </div>
+        </div>
+
+        <!-- Log transform note -->
+        <div class="mt-5 p-4 rounded-xl bg-purple-950/20 border border-purple-900/30 flex items-start space-x-3">
+          <i data-lucide="function-square" class="w-5 h-5 text-purple-400 shrink-0 mt-0.5"></i>
+          <div>
+            <p class="text-xs font-bold text-purple-300">Transformation log1p sur les cibles</p>
+            <p class="text-[11px] text-slate-400 mt-1 leading-normal">Les variables <strong class="text-white">unit_sales</strong> et <strong class="text-white">transactions</strong> sont transformées via log1p(x) avant modélisation. Cette transformation réduit l'asymétrie des distributions de ventes et stabilise la variance des résidus. La transformation inverse expm1 est appliquée en post-traitement.</p>
+          </div>
+        </div>
+
+        <!-- Features futures connues -->
+        <div class="mt-4 p-4 rounded-xl bg-emerald-950/20 border border-emerald-900/30 flex items-start space-x-3">
+          <i data-lucide="zap" class="w-5 h-5 text-emerald-400 shrink-0 mt-0.5"></i>
+          <div>
+            <p class="text-xs font-bold text-emerald-300">9 Features Futures Connues à l'Avance — Avantage décisif</p>
+            <p class="text-[11px] text-slate-400 mt-1 leading-normal">Les features <strong class="text-emerald-300">Future_is_Holiday, Future_is_National, Future_is_Local, Future_is_likely_closed, Future_day_of_week, Future_is_weekend, Future_is_month_start, Future_is_month_end, Future_On_Promotion</strong> décrivent le jour cible (et non le jour courant). Elles sont construites via shift(-(h+1)) et sont légitimes car connues à l'avance (calendrier + plans promos).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== TAB: À PROPOS ===================== -->
+    <div v-if="activeTab==='about'" class="space-y-6">
+
+      <!-- Contexte Dylia -->
+      <div class="glass p-8 rounded-3xl relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-64 h-64 rounded-full bg-brand-500/5 blur-3xl pointer-events-none"></div>
+        <div class="relative">
+          <div class="flex items-center space-x-3 mb-4">
+            <div class="p-2.5 rounded-xl bg-amber-500/15">
+              <i data-lucide="map-pin" class="w-5 h-5 text-amber-500"></i>
+            </div>
+            <h3 class="font-heading font-bold text-2xl text-white">Contexte du Projet</h3>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <h4 class="text-sm font-bold text-slate-200 mb-2">Problématique</h4>
+              <p class="text-sm text-slate-400 leading-relaxed">La prévision précise des ventes au détail conditionne la gestion des stocks, la planification des approvisionnements, la réduction du gaspillage et l'optimisation de la trésorerie. Dans les marchés émergents comme l'Algérie, les données historiques structurées sont souvent inexistantes — ce projet résout ce défi.</p>
+            </div>
+            <div>
+              <h4 class="text-sm font-bold text-slate-200 mb-2">Analogie Cuenca ↔ Tizi-Ouzou</h4>
+              <p class="text-sm text-slate-400 leading-relaxed">Le magasin 39 de Cuenca (Équateur) a été sélectionné par distance normalisée multi-critères. Cuenca est une ville andine d'altitude similaire à Tizi-Ouzou, avec un climat méditerranéen de montagne, des habitudes de consommation familiale comparables et une économie mixte urbaine/périurbaine.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sélection magasin 39 -->
+      <div class="glass p-6 rounded-3xl">
+        <h3 class="font-heading font-bold text-lg text-white mb-4">Sélection du Magasin 39 — Méthode Algorithmique</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="p-4 rounded-xl bg-white/5 border border-bordercol">
+            <div class="flex items-center space-x-2 mb-2">
+              <span class="w-6 h-6 rounded-full bg-brand-500/20 text-brand-400 text-xs flex items-center justify-center font-bold">1</span>
+              <span class="text-sm font-bold text-white">Filtrage par type</span>
+            </div>
+            <p class="text-[11px] text-slate-400 leading-normal">Seuls les magasins de <strong class="text-white">type B</strong> (taille intermédiaire) retenus — profil identique à un marché de quartier dans une ville de moyenne importance.</p>
+          </div>
+          <div class="p-4 rounded-xl bg-white/5 border border-bordercol">
+            <div class="flex items-center space-x-2 mb-2">
+              <span class="w-6 h-6 rounded-full bg-brand-500/20 text-brand-400 text-xs flex items-center justify-center font-bold">2</span>
+              <span class="text-sm font-bold text-white">Distance normalisée</span>
+            </div>
+            <p class="text-[11px] text-slate-400 leading-normal">Minimisation de la <strong class="text-white">distance combinée</strong> entre avg_transactions et avg_sales par rapport aux médianes des magasins de type B.</p>
+          </div>
+          <div class="p-4 rounded-xl bg-sky-500/5 border border-sky-500/20">
+            <div class="flex items-center space-x-2 mb-2">
+              <span class="w-6 h-6 rounded-full bg-sky-500/20 text-sky-400 text-xs flex items-center justify-center font-bold">✓</span>
+              <span class="text-sm font-bold text-sky-300">Résultat : Magasin 39</span>
+            </div>
+            <p class="text-[11px] text-slate-400 leading-normal">Cuenca, Équateur — ville andine, commerce alimentaire/ménager similaire à Dylia. Patterns saisonniers et effets des fériés structurellement analogues.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stack technologique -->
+      <div class="glass p-6 rounded-3xl">
+        <h3 class="font-heading font-bold text-lg text-white mb-5">Stack Technologique</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div v-for="tech in techStack" :key="tech.name" class="tech-badge">
+            <div class="text-xl">{{ tech.emoji }}</div>
+            <div>
+              <div class="text-sm font-bold text-white">{{ tech.name }}</div>
+              <div class="text-[10px] text-slate-500">{{ tech.role }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pipeline phases -->
+      <div class="glass p-6 rounded-3xl">
+        <h3 class="font-heading font-bold text-lg text-white mb-5">Architecture du Pipeline — 5 Phases</h3>
+        <div class="space-y-3">
+          <div v-for="phase in pipelinePhases" :key="phase.num" class="flex items-center space-x-4 p-3.5 rounded-xl hover:bg-white/5 transition-all">
+            <div class="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0"
+              :style="{background: phase.color+'20', color: phase.color}">{{ phase.num }}</div>
+            <div class="flex-1">
+              <div class="flex items-center space-x-2">
+                <span class="text-sm font-bold text-white">{{ phase.title }}</span>
+                <span class="font-mono text-[10px] text-slate-500">{{ phase.file }}</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-0.5">{{ phase.desc }}</p>
+            </div>
+            <div class="badge border" :style="{background: phase.color+'10', color: phase.color, borderColor: phase.color+'30'}">
+              {{ phase.badge }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Métriques finales -->
+      <div class="glass p-6 rounded-3xl">
+        <h3 class="font-heading font-bold text-lg text-white mb-4">Performance Finale & Transférabilité</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <p class="text-sm text-slate-400 leading-relaxed mb-3">Le système atteint une <strong class="text-white">NWRMSLE moyenne de 0.4487</strong> sur les 28 horizons, avec une erreur minimale de 0.389 au jour 1 et maximale de 0.512 au jour 26. L'entraînement des 28 modèles finaux s'est effectué en <strong class="text-white">2 min 25 sec</strong> (~5.2s par modèle).</p>
+            <p class="text-sm text-slate-400 leading-relaxed">Le pipeline est conçu pour la <strong class="text-emerald-400">transférabilité</strong> : lorsque des données réelles du marché de Dylia seront disponibles, il suffit de remplacer les fichiers sources (SalesData.csv, etc.) sans modifier la logique d'ingénierie des features.</p>
+          </div>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between p-3 rounded-xl bg-white/5">
+              <span class="text-xs text-slate-400">Articles évalués</span>
+              <span class="text-sm font-bold text-white font-mono">6 160</span>
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-xl bg-white/5">
+              <span class="text-xs text-slate-400">Prédictions totales</span>
+              <span class="text-sm font-bold text-white font-mono">172 480</span>
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-xl bg-white/5">
+              <span class="text-xs text-slate-400">Temps entraînement final</span>
+              <span class="text-sm font-bold text-white font-mono">2 min 25 sec</span>
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-xl bg-white/5">
+              <span class="text-xs text-slate-400">Évaluations Optuna</span>
+              <span class="text-sm font-bold text-white font-mono">1 400</span>
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-xl bg-white/5">
+              <span class="text-xs text-slate-400">Cache triple niveau</span>
+              <span class="text-sm font-bold text-emerald-400 font-mono">✓ Actif</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== TAB: LOCALISATION ===================== -->
+    <div v-if="activeTab==='localisation'" class="space-y-6">
+
+      <!-- Info cards row -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="glass glass-hover p-5 rounded-2xl flex items-center space-x-4">
+          <div class="p-3 rounded-xl bg-indigo-500/10 text-indigo-400 shrink-0">
+            <i data-lucide="map-pin" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <p class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Localisation</p>
+            <p class="text-sm font-bold text-white mt-0.5">Dylia Market, Tizi-Ouzou</p>
+            <p class="text-[11px] text-slate-400">Algérie · 36.7156°N, 4.0497°E</p>
+          </div>
+        </div>
+        <div class="glass glass-hover p-5 rounded-2xl flex items-center space-x-4">
+          <div class="p-3 rounded-xl bg-emerald-500/10 text-emerald-400 shrink-0">
+            <i data-lucide="navigation" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <p class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Distance Alger</p>
+            <p class="text-sm font-bold text-white mt-0.5">~100 km à l'est d'Alger</p>
+            <p class="text-[11px] text-slate-400">Chef-lieu de wilaya, axe Alger–Tizi-Ouzou</p>
+          </div>
+        </div>
+        <div class="glass glass-hover p-5 rounded-2xl flex items-center space-x-4">
+          <div class="p-3 rounded-xl bg-amber-500/10 text-amber-400 shrink-0">
+            <i data-lucide="database" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <p class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Proxy Dataset</p>
+            <p class="text-sm font-bold text-white mt-0.5">Magasin 39 — Cuenca</p>
+            <p class="text-[11px] text-slate-400">Équateur · profil socio-éco similaire</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Map + sidebar info -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- MAP -->
+        <div class="glass p-4 rounded-3xl lg:col-span-2">
+          <div class="flex items-center justify-between mb-3 px-2">
+            <div>
+              <h3 class="font-heading font-bold text-lg text-white">Emplacement du Marché</h3>
+              <p class="text-xs text-slate-400">Dylia Market, Tizi-Ouzou — carte interactive OpenStreetMap</p>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="flex items-center gap-1.5 text-[11px] text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
+                <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse inline-block"></span>
+                Marché de Dylia
+              </span>
+            </div>
+          </div>
+          <div id="map-dylia"></div>
+          <div class="flex items-center space-x-4 mt-3 px-2 text-[10px] text-slate-500">
+            <span class="flex items-center space-x-1.5">
+              <span class="w-3 h-3 rounded-full bg-indigo-500 inline-block"></span>
+              <span>Marché de Dylia</span>
+            </span>
+            <span class="flex items-center space-x-1.5">
+              <span class="w-3 h-3 rounded-full border border-indigo-500 border-dashed inline-block"></span>
+              <span>Zone de chalandise ~1km</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Info panel -->
+        <div class="glass p-6 rounded-3xl flex flex-col space-y-5">
+          <div>
+            <h3 class="font-heading font-bold text-lg text-white">Contexte Géographique</h3>
+            <p class="text-xs text-slate-400 mt-1">Pourquoi Dylia comme marché cible</p>
+          </div>
+
+          <div class="space-y-3">
+            <div class="p-4 rounded-xl bg-white/5 border border-bordercol">
+              <div class="flex items-center space-x-2 mb-2">
+                <i data-lucide="home" class="w-3.5 h-3.5 text-indigo-400"></i>
+                <span class="text-xs font-bold text-white">Commune de Dylia</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">Commune rurale/péri-urbaine de la wilaya de Blida, à forte densité résidentielle. Profil de consommation familial — marché de proximité avec flux régulier.</p>
+            </div>
+
+            <div class="p-4 rounded-xl bg-white/5 border border-bordercol">
+              <div class="flex items-center space-x-2 mb-2">
+                <i data-lucide="thermometer" class="w-3.5 h-3.5 text-amber-400"></i>
+                <span class="text-xs font-bold text-white">Climat similaire à Cuenca</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">Climat méditerranéen semi-aride. Cuenca (Équateur) a été sélectionné par distance normalisée multi-critères pour son analogie climatique et économique.</p>
+            </div>
+
+            <div class="p-4 rounded-xl bg-white/5 border border-bordercol">
+              <div class="flex items-center space-x-2 mb-2">
+                <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-emerald-400"></i>
+                <span class="text-xs font-bold text-white">Transfert du modèle</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">Le pipeline est conçu pour être transférable : remplacer les fichiers CSV sources suffit pour l'adapter aux données réelles du marché.</p>
+            </div>
+          </div>
+
+          <!-- Coordonnées -->
+          <div class="p-4 rounded-xl bg-indigo-950/25 border border-indigo-900/30 mt-auto">
+            <p class="text-[10px] uppercase tracking-wider text-indigo-400 font-semibold mb-2">Coordonnées GPS</p>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <p class="text-[10px] text-slate-500">Latitude</p>
+                <p class="text-sm font-mono font-bold text-white">36.7156° N</p>
+              </div>
+              <div>
+                <p class="text-[10px] text-slate-500">Longitude</p>
+                <p class="text-sm font-mono font-bold text-white">4.0497° E</p>
+              </div>
+              <div>
+                <p class="text-[10px] text-slate-500">Wilaya</p>
+                <p class="text-sm font-bold text-white">Tizi-Ouzou (15)</p>
+              </div>
+              <div>
+                <p class="text-[10px] text-slate-500">Altitude</p>
+                <p class="text-sm font-bold text-white">~350 m</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ===== CHATBOT PANEL ===== -->
+<div id="chatbot-panel" style="display:none;position:fixed;bottom:24px;right:24px;width:400px;max-width:calc(100vw - 32px);z-index:9999;border-radius:20px;background:#0c0c1e;border:1px solid rgba(16,185,129,0.3);box-shadow:0 25px 60px rgba(0,0,0,0.6),0 0 40px rgba(16,185,129,0.08);overflow:hidden;flex-direction:column;height:520px;">
+  <div style="padding:14px 18px;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(5,150,105,0.08));border-bottom:1px solid rgba(16,185,129,0.2);display:flex;align-items:center;justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#059669,#047857);display:flex;align-items:center;justify-content:center;">
+        <i data-lucide="bot" style="width:18px;height:18px;color:white;"></i>
+      </div>
+      <div>
+        <p style="font-weight:700;font-size:14px;color:#f1f5f9;margin:0;">Assistant Dylia</p>
+        <p style="font-size:11px;color:#34d399;margin:0;" id="chatbot-status">● llama3.1:8b · Ollama local</p>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button id="btn-voice-toggle" onclick="toggleVoice()" title="Activer/désactiver la voix"
+        style="width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);cursor:pointer;color:#94a3b8;display:flex;align-items:center;justify-content:center;transition:all 0.2s;">
+        <i data-lucide="volume-2" style="width:14px;height:14px;"></i>
+      </button>
+      <button onclick="clearChatbot()"
+        style="width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);cursor:pointer;color:#94a3b8;display:flex;align-items:center;justify-content:center;" title="Effacer">
+        <i data-lucide="trash-2" style="width:14px;height:14px;"></i>
+      </button>
+      <button onclick="closeChatbot()"
+        style="width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);cursor:pointer;color:#94a3b8;display:flex;align-items:center;justify-content:center;" title="Fermer">
+        <i data-lucide="x" style="width:14px;height:14px;"></i>
+      </button>
+    </div>
+  </div>
+  <div id="chatbot-messages" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;">
+    <div style="display:flex;gap:8px;align-items:flex-start;">
+      <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#059669,#047857);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i data-lucide="bot" style="width:14px;height:14px;color:white;"></i>
+      </div>
+      <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.15);border-radius:12px 12px 12px 4px;padding:10px 14px;max-width:85%;">
+        <p style="font-size:13px;color:#e2e8f0;margin:0;line-height:1.5;">Bonjour ! Je suis l'assistant IA du Dylia Market de Tizi-Ouzou. Je tourne sur <strong style="color:#34d399;">llama3.1:8b</strong> via Ollama en local. Posez-moi vos questions sur les prévisions de ventes, les promotions ou le modèle ML !</p>
+      </div>
+    </div>
+  </div>
+  <div style="padding:12px;border-top:1px solid rgba(255,255,255,0.06);">
+    <div style="display:flex;gap:8px;align-items:center;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:8px 12px;transition:all 0.2s;" id="chat-input-wrap">
+      <input id="chatbot-input" type="text" placeholder="Posez votre question…"
+        style="flex:1;background:transparent;border:none;outline:none;color:#f1f5f9;font-size:13px;font-family:'Inter',sans-serif;"
+        onkeydown="if(event.key==='Enter')sendChatMessage()">
+      <button onclick="sendChatMessage()"
+        style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#059669,#047857);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i data-lucide="send" style="width:14px;height:14px;color:white;"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== AI SUMMARY MODAL ===== -->
+<div id="ai-summary-modal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-items:center;justify-content:center;">
+  <div style="background:#0c0c1e;border:1px solid rgba(168,85,247,0.3);border-radius:24px;width:660px;max-width:calc(100vw - 32px);max-height:85vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 30px 80px rgba(0,0,0,0.7);">
+
+    <!-- Header -->
+    <div style="padding:20px 24px;border-bottom:1px solid rgba(168,85,247,0.2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,rgba(168,85,247,0.3),rgba(99,102,241,0.2));border:1px solid rgba(168,85,247,0.4);display:flex;align-items:center;justify-content:center;">
+          <i data-lucide="sparkles" style="width:20px;height:20px;color:#d8b4fe;"></i>
+        </div>
+        <div>
+          <p style="font-weight:700;font-size:16px;color:#f1f5f9;margin:0;">Résumé IA — Dylia Market</p>
+          <p style="font-size:11px;color:#a78bfa;margin:0;">llama3.1:8b · Ollama local</p>
+        </div>
+      </div>
+      <button id="btn-close-summary" onclick="closeAiSummary()"
+        style="width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);cursor:pointer;color:#cbd5e1;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.2s;"
+        onmouseover="this.style.background='rgba(239,68,68,0.2)';this.style.borderColor='rgba(239,68,68,0.4)';this.style.color='#fca5a5'"
+        onmouseout="this.style.background='rgba(255,255,255,0.07)';this.style.borderColor='rgba(255,255,255,0.15)';this.style.color='#cbd5e1'">
+        <i data-lucide="x" style="width:16px;height:16px;"></i>
+      </button>
+    </div>
+
+    <!-- Language Selector — shown only when not yet generated -->
+    <div id="summary-lang-picker" style="padding:24px;display:flex;flex-direction:column;align-items:center;gap:20px;">
+      <div style="text-align:center;">
+        <p style="font-size:15px;font-weight:600;color:#f1f5f9;margin:0 0 6px;">Choisissez la langue du résumé</p>
+        <p style="font-size:12px;color:#64748b;margin:0;">Le résumé sera généré par llama3.1:8b en local</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;width:100%;">
+        <button class="lang-pick-btn" onclick="generateAiSummary('fr')" data-lang="fr"
+          style="padding:14px 10px;border-radius:14px;border:1px solid rgba(168,85,247,0.25);background:rgba(168,85,247,0.07);cursor:pointer;color:#e2e8f0;font-size:13px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:6px;transition:all 0.2s;"
+          onmouseover="this.style.background='rgba(168,85,247,0.2)';this.style.borderColor='rgba(168,85,247,0.5)'"
+          onmouseout="this.style.background='rgba(168,85,247,0.07)';this.style.borderColor='rgba(168,85,247,0.25)'">
+          <span style="font-size:24px;">🇫🇷</span> Français
+        </button>
+        <button class="lang-pick-btn" onclick="generateAiSummary('en')" data-lang="en"
+          style="padding:14px 10px;border-radius:14px;border:1px solid rgba(168,85,247,0.25);background:rgba(168,85,247,0.07);cursor:pointer;color:#e2e8f0;font-size:13px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:6px;transition:all 0.2s;"
+          onmouseover="this.style.background='rgba(168,85,247,0.2)';this.style.borderColor='rgba(168,85,247,0.5)'"
+          onmouseout="this.style.background='rgba(168,85,247,0.07)';this.style.borderColor='rgba(168,85,247,0.25)'">
+          <span style="font-size:24px;">🇬🇧</span> English
+        </button>
+        <button class="lang-pick-btn" onclick="generateAiSummary('ar')" data-lang="ar"
+          style="padding:14px 10px;border-radius:14px;border:1px solid rgba(168,85,247,0.25);background:rgba(168,85,247,0.07);cursor:pointer;color:#e2e8f0;font-size:13px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:6px;transition:all 0.2s;"
+          onmouseover="this.style.background='rgba(168,85,247,0.2)';this.style.borderColor='rgba(168,85,247,0.5)'"
+          onmouseout="this.style.background='rgba(168,85,247,0.07)';this.style.borderColor='rgba(168,85,247,0.25)'">
+          <span style="font-size:24px;">🇩🇿</span> العربية
+        </button>
+        <button class="lang-pick-btn" onclick="generateAiSummary('es')" data-lang="es"
+          style="padding:14px 10px;border-radius:14px;border:1px solid rgba(168,85,247,0.25);background:rgba(168,85,247,0.07);cursor:pointer;color:#e2e8f0;font-size:13px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:6px;transition:all 0.2s;"
+          onmouseover="this.style.background='rgba(168,85,247,0.2)';this.style.borderColor='rgba(168,85,247,0.5)'"
+          onmouseout="this.style.background='rgba(168,85,247,0.07)';this.style.borderColor='rgba(168,85,247,0.25)'">
+          <span style="font-size:24px;">🇪🇸</span> Español
+        </button>
+        <button class="lang-pick-btn" onclick="generateAiSummary('it')" data-lang="it"
+          style="padding:14px 10px;border-radius:14px;border:1px solid rgba(168,85,247,0.25);background:rgba(168,85,247,0.07);cursor:pointer;color:#e2e8f0;font-size:13px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:6px;transition:all 0.2s;"
+          onmouseover="this.style.background='rgba(168,85,247,0.2)';this.style.borderColor='rgba(168,85,247,0.5)'"
+          onmouseout="this.style.background='rgba(168,85,247,0.07)';this.style.borderColor='rgba(168,85,247,0.25)'">
+          <span style="font-size:24px;">🇮🇹</span> Italiano
+        </button>
+
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="summary-loading" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:48px;gap:16px;flex:1;">
+      <div style="width:44px;height:44px;border:3px solid rgba(168,85,247,0.2);border-top-color:#a78bfa;border-radius:50%;animation:spin 0.9s linear infinite;"></div>
+      <p style="color:#94a3b8;font-size:13px;margin:0;" id="summary-loading-text">Génération du résumé en cours…</p>
+      <p style="color:#4b5563;font-size:11px;margin:0;">llama3.1:8b · Ollama local</p>
+    </div>
+
+    <!-- Result -->
+    <div id="summary-result" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+      <div style="padding:8px 24px;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+        <p style="font-size:12px;color:#64748b;margin:0;" id="summary-result-label"></p>
+        <button onclick="backToLangPicker()"
+          style="padding:5px 12px;border-radius:8px;border:1px solid rgba(168,85,247,0.25);background:transparent;cursor:pointer;color:#a78bfa;font-size:11px;font-weight:600;display:flex;align-items:center;gap:5px;transition:all 0.2s;"
+          onmouseover="this.style.background='rgba(168,85,247,0.15)'"
+          onmouseout="this.style.background='transparent'">
+          <i data-lucide="chevron-left" style="width:12px;height:12px;"></i> Changer de langue
+        </button>
+      </div>
+      <div id="summary-text" style="flex:1;overflow-y:auto;padding:20px 24px;color:#e2e8f0;font-size:13.5px;line-height:1.8;white-space:pre-wrap;"></div>
+    </div>
+
+    <!-- Error -->
+    <div id="summary-error-block" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:32px;gap:16px;flex:1;text-align:center;">
+      <div style="width:48px;height:48px;border-radius:14px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);display:flex;align-items:center;justify-content:center;">
+        <i data-lucide="wifi-off" style="width:22px;height:22px;color:#f87171;"></i>
+      </div>
+      <div>
+        <p style="color:#f87171;font-size:14px;font-weight:600;margin:0 0 8px;">Ollama non disponible</p>
+        <p style="color:#64748b;font-size:12px;margin:0;line-height:1.6;" id="summary-error-msg"></p>
+      </div>
+      <button onclick="backToLangPicker()"
+        style="padding:8px 18px;border-radius:10px;border:1px solid rgba(168,85,247,0.3);background:rgba(168,85,247,0.1);color:#d8b4fe;font-size:12px;font-weight:600;cursor:pointer;">
+        ← Réessayer
+      </button>
+    </div>
+
+    <!-- Footer -->
+    <div id="summary-footer" style="display:none;padding:14px 24px;border-top:1px solid rgba(255,255,255,0.06);justify-content:flex-end;gap:8px;flex-shrink:0;">
+      <button onclick="copyAiSummary()" id="btn-copy-summary"
+        style="padding:8px 16px;border-radius:10px;border:1px solid rgba(168,85,247,0.3);background:rgba(168,85,247,0.1);color:#d8b4fe;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.2s;"
+        onmouseover="this.style.background='rgba(168,85,247,0.2)'"
+        onmouseout="this.style.background='rgba(168,85,247,0.1)'">
+        <i data-lucide="copy" style="width:13px;height:13px;"></i> Copier
+      </button>
+      <button onclick="closeAiSummary()"
+        style="padding:8px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#94a3b8;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;"
+        onmouseover="this.style.background='rgba(255,255,255,0.1)'"
+        onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+        Fermer
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<style>
+@keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+.chat-msg-user { display:flex; justify-content:flex-end; }
+.chat-msg-user .bubble { background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.25);border-radius:12px 12px 4px 12px;padding:10px 14px;max-width:85%;font-size:13px;color:#e2e8f0;line-height:1.5; }
+.chat-msg-bot { display:flex;gap:8px;align-items:flex-start; }
+.chat-msg-bot .avatar { width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#059669,#047857);display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+.chat-msg-bot .bubble { background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.15);border-radius:12px 12px 12px 4px;padding:10px 14px;max-width:85%;font-size:13px;color:#e2e8f0;line-height:1.5; }
+.chat-typing { display:flex;gap:4px;padding:4px 0; }
+.chat-typing span { width:6px;height:6px;border-radius:50%;background:#34d399;animation:bounce 1.2s infinite; }
+.chat-typing span:nth-child(2){animation-delay:0.2s}
+.chat-typing span:nth-child(3){animation-delay:0.4s}
+@keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
+#btn-voice-toggle.voice-on { background:rgba(16,185,129,0.2) !important; border-color:rgba(16,185,129,0.4) !important; color:#34d399 !important; }
+</style>
+
+<script>
+const { createApp, ref, onMounted, computed } = Vue;
+
+createApp({
+  setup() {
+    const activeTab = ref('dashboard');
+    const loading = ref(false);
+    const error = ref(null);
+
+    const kpiData = ref({
+      totalForecastedSales: 0, avgDailyForecast: 0, uniqueItems: 0,
+      uniqueFamilies: 0, totalHistoricalSales30d: 0, topFamilies: [],
+      latestOilPrice: 0, latestTransactions: 0, testingDate: '---'
+    });
+
+    const predictions = ref([]);
+    const totalPredictions = ref(0);
+    const offset = ref(0);
+    const limit = ref(10);
+    const selectedItem = ref(null);
+    const itemDetails = ref(null);
+
+    const filters = ref({ family: '', item_nbr: null, perishable: '' });
+    const families = ref([]);
+    const holidays = ref([]);
+    const marketData = ref([]);
+    const promoData = ref({ familyPromoStats:[], promoLift:null, upcomingPromoTimeline:[] });
+
+    // ===== DARK / LIGHT MODE =====
+    const isDark = ref(true);
+    const toggleTheme = () => {
+      isDark.value = !isDark.value;
+      document.documentElement.classList.toggle('dark', isDark.value);
+      document.documentElement.classList.toggle('light', !isDark.value);
+      setTimeout(() => lucide.createIcons(), 50);
+    };
+
+    // ===== MULTI-LANGUE =====
+    const langs = [
+      { code: 'fr', flag: '🇫🇷', name: 'Français' },
+      { code: 'en', flag: '🇬🇧', name: 'English' },
+      { code: 'ar', flag: '🇩🇿', name: 'العربية' },
+      { code: 'es', flag: '🇪🇸', name: 'Español' },
+      { code: 'it', flag: '🇮🇹', name: 'Italiano' },
+    ];
+    const currentLang = ref('fr');
+
+    const i18n = {
+      fr: {
+        forecast_date: 'Date de prévision',
+        horizon_28: 'Horizon 28 jours',
+        refresh: 'Actualiser',
+        dark_mode: 'Mode sombre',
+        light_mode: 'Mode clair',
+        // Sidebar
+        analysis: 'Analyse',
+        model: 'Modèle',
+        nav_dashboard: 'Dashboard',
+        nav_predictions: 'Predictions Explorer',
+        nav_market: 'Market Factors',
+        nav_promotions: 'Promotions',
+        nav_holidays: 'Calendrier Événements',
+        nav_performance: 'Performance',
+        nav_modelisation: 'Modélisation',
+        nav_about: 'À Propos',
+        // KPIs
+        kpi_total: 'Ventes Prévues (28j)',
+        kpi_daily: 'Moy. Journalière',
+        kpi_items: 'Articles Actifs',
+        kpi_families: 'Familles',
+        kpi_oil: 'Prix Pétrole',
+        kpi_units: 'Unités toutes familles',
+        kpi_per_day: 'unités / jour',
+        kpi_catalog: 'catalogue test',
+        kpi_categories: 'catégories produits',
+        kpi_wti: 'WTI Crude / baril',
+        // Alerts
+        alerts_title: 'Alertes Intelligentes',
+        alerts_empty: 'Aucune alerte active — tout est nominal.',
+        alerts_refresh: 'Actualiser',
+        // Filters
+        filter_family: 'Filtrer par famille',
+        filter_all: 'Toutes',
+        filter_search: 'Rechercher par N° article (ex: 103501)…',
+        filter_perishable: 'Périsabilité :',
+        filter_all2: 'Tous',
+        filter_perish: 'Périsable',
+        filter_nonperish: 'Non-périsable',
+        filter_reset: 'Réinitialiser',
+        export_csv: 'Export CSV',
+        // Detail panel
+        detail_title: 'Détail Article',
+        detail_select: 'Sélectionnez un article dans le tableau pour voir son détail.',
+        stock_suggest: 'Stock suggéré',
+        reorder_point: 'Point réappro.',
+        timeline_title: 'Calendrier 28j — Promo & Fériés',
+        whatif_title: 'Simulateur What-If — Promos',
+        whatif_desc: 'Activez/désactivez les promos jour par jour — le modèle recalcule les prévisions.',
+        whatif_all_on: 'Tout activer',
+        whatif_all_off: 'Tout désactiver',
+        whatif_simulate: 'Simuler',
+        whatif_loading: 'Calcul…',
+        whatif_vs: 'vs actuel',
+        // Tab titles
+        tab_dashboard: 'Forecast Dashboard',
+        tab_predictions: 'Exploration des Prévisions',
+        tab_market: 'Facteurs Économiques & Marché',
+        tab_promotions: 'Analyse des Promotions',
+        tab_holidays: 'Calendrier Événements',
+        tab_performance: 'Performance des Modèles',
+        tab_modelisation: 'Modélisation & Features',
+        tab_about: 'À Propos du Projet',
+      },
+      en: {
+        forecast_date: 'Forecast date',
+        horizon_28: '28-day horizon',
+        refresh: 'Refresh',
+        dark_mode: 'Dark mode',
+        light_mode: 'Light mode',
+        analysis: 'Analysis',
+        model: 'Model',
+        nav_dashboard: 'Dashboard',
+        nav_predictions: 'Predictions Explorer',
+        nav_market: 'Market Factors',
+        nav_promotions: 'Promotions',
+        nav_holidays: 'Event Calendar',
+        nav_performance: 'Performance',
+        nav_modelisation: 'Modelling',
+        nav_about: 'About',
+        kpi_total: 'Forecasted Sales (28d)',
+        kpi_daily: 'Daily Average',
+        kpi_items: 'Active Items',
+        kpi_families: 'Families',
+        kpi_oil: 'Oil Price',
+        kpi_units: 'Units across all families',
+        kpi_per_day: 'units / day',
+        kpi_catalog: 'test catalog',
+        kpi_categories: 'product categories',
+        kpi_wti: 'WTI Crude / barrel',
+        alerts_title: 'Smart Alerts',
+        alerts_empty: 'No active alerts — everything is nominal.',
+        alerts_refresh: 'Refresh',
+        filter_family: 'Filter by family',
+        filter_all: 'All',
+        filter_search: 'Search by item number (e.g. 103501)…',
+        filter_perishable: 'Perishability:',
+        filter_all2: 'All',
+        filter_perish: 'Perishable',
+        filter_nonperish: 'Non-perishable',
+        filter_reset: 'Reset',
+        export_csv: 'Export CSV',
+        detail_title: 'Item Detail',
+        detail_select: 'Select an item from the table to view its details.',
+        stock_suggest: 'Suggested stock',
+        reorder_point: 'Reorder point',
+        timeline_title: '28-day Timeline — Promos & Holidays',
+        whatif_title: 'What-If Simulator — Promos',
+        whatif_desc: 'Toggle promotions day by day — the model recalculates forecasts.',
+        whatif_all_on: 'Enable all',
+        whatif_all_off: 'Disable all',
+        whatif_simulate: 'Simulate',
+        whatif_loading: 'Computing…',
+        whatif_vs: 'vs current',
+        tab_dashboard: 'Forecast Dashboard',
+        tab_predictions: 'Predictions Explorer',
+        tab_market: 'Economic & Market Factors',
+        tab_promotions: 'Promotions Analysis',
+        tab_holidays: 'Event Calendar',
+        tab_performance: 'Model Performance',
+        tab_modelisation: 'Modelling & Features',
+        tab_about: 'About the Project',
+      },
+      ar: {
+        forecast_date: 'تاريخ التوقع',
+        horizon_28: 'أفق 28 يومًا',
+        refresh: 'تحديث',
+        dark_mode: 'الوضع الداكن',
+        light_mode: 'الوضع الفاتح',
+        analysis: 'التحليل',
+        model: 'النموذج',
+        nav_dashboard: 'لوحة القيادة',
+        nav_predictions: 'استكشاف التوقعات',
+        nav_market: 'عوامل السوق',
+        nav_promotions: 'العروض الترويجية',
+        nav_holidays: 'تقويم الأحداث',
+        nav_performance: 'الأداء',
+        nav_modelisation: 'النمذجة',
+        nav_about: 'حول المشروع',
+        kpi_total: 'المبيعات المتوقعة (28 يوم)',
+        kpi_daily: 'المتوسط اليومي',
+        kpi_items: 'المنتجات النشطة',
+        kpi_families: 'الفئات',
+        kpi_oil: 'سعر النفط',
+        kpi_units: 'وحدات لجميع الفئات',
+        kpi_per_day: 'وحدة / يوم',
+        kpi_catalog: 'الكتالوج التجريبي',
+        kpi_categories: 'فئة منتجات',
+        kpi_wti: 'خام WTI / برميل',
+        alerts_title: 'التنبيهات الذكية',
+        alerts_empty: 'لا توجد تنبيهات نشطة — كل شيء طبيعي.',
+        alerts_refresh: 'تحديث',
+        filter_family: 'تصفية حسب الفئة',
+        filter_all: 'الكل',
+        filter_search: 'ابحث برقم المنتج (مثال: 103501)…',
+        filter_perishable: 'قابلية التلف:',
+        filter_all2: 'الكل',
+        filter_perish: 'قابل للتلف',
+        filter_nonperish: 'غير قابل للتلف',
+        filter_reset: 'إعادة تعيين',
+        export_csv: 'تصدير CSV',
+        detail_title: 'تفاصيل المنتج',
+        detail_select: 'اختر منتجًا من الجدول لعرض تفاصيله.',
+        stock_suggest: 'المخزون المقترح',
+        reorder_point: 'نقطة إعادة الطلب',
+        timeline_title: 'جدول 28 يومًا — العروض والأعياد',
+        whatif_title: 'محاكي ماذا لو — العروض',
+        whatif_desc: 'فعّل/عطّل العروض يومًا بيوم — يعيد النموذج حساب التوقعات.',
+        whatif_all_on: 'تفعيل الكل',
+        whatif_all_off: 'تعطيل الكل',
+        whatif_simulate: 'محاكاة',
+        whatif_loading: 'جارٍ الحساب…',
+        whatif_vs: 'مقارنة بالحالي',
+        tab_dashboard: 'لوحة التوقعات',
+        tab_predictions: 'استكشاف التوقعات',
+        tab_market: 'العوامل الاقتصادية والسوقية',
+        tab_promotions: 'تحليل العروض',
+        tab_holidays: 'تقويم الأحداث',
+        tab_performance: 'أداء النماذج',
+        tab_modelisation: 'النمذجة والميزات',
+        tab_about: 'حول المشروع',
+      },
+      es: {
+        forecast_date: 'Fecha de pronóstico',
+        horizon_28: 'Horizonte 28 días',
+        refresh: 'Actualizar',
+        dark_mode: 'Modo oscuro',
+        light_mode: 'Modo claro',
+        analysis: 'Análisis',
+        model: 'Modelo',
+        nav_dashboard: 'Panel principal',
+        nav_predictions: 'Explorador de predicciones',
+        nav_market: 'Factores de mercado',
+        nav_promotions: 'Promociones',
+        nav_holidays: 'Calendario de eventos',
+        nav_performance: 'Rendimiento',
+        nav_modelisation: 'Modelización',
+        nav_about: 'Acerca de',
+        kpi_total: 'Ventas previstas (28d)',
+        kpi_daily: 'Promedio diario',
+        kpi_items: 'Artículos activos',
+        kpi_families: 'Familias',
+        kpi_oil: 'Precio del petróleo',
+        kpi_units: 'Unidades todas las familias',
+        kpi_per_day: 'unidades / día',
+        kpi_catalog: 'catálogo de prueba',
+        kpi_categories: 'categorías de productos',
+        kpi_wti: 'WTI Crudo / barril',
+        alerts_title: 'Alertas inteligentes',
+        alerts_empty: 'Sin alertas activas — todo está nominal.',
+        alerts_refresh: 'Actualizar',
+        filter_family: 'Filtrar por familia',
+        filter_all: 'Todas',
+        filter_search: 'Buscar por N° de artículo (ej: 103501)…',
+        filter_perishable: 'Perecibilidad:',
+        filter_all2: 'Todos',
+        filter_perish: 'Perecedero',
+        filter_nonperish: 'No perecedero',
+        filter_reset: 'Restablecer',
+        export_csv: 'Exportar CSV',
+        detail_title: 'Detalle del artículo',
+        detail_select: 'Seleccione un artículo de la tabla para ver su detalle.',
+        stock_suggest: 'Stock sugerido',
+        reorder_point: 'Punto de reorden',
+        timeline_title: 'Calendario 28d — Promos y festivos',
+        whatif_title: 'Simulador What-If — Promos',
+        whatif_desc: 'Active/desactive promociones día a día — el modelo recalcula.',
+        whatif_all_on: 'Activar todo',
+        whatif_all_off: 'Desactivar todo',
+        whatif_simulate: 'Simular',
+        whatif_loading: 'Calculando…',
+        whatif_vs: 'vs actual',
+        tab_dashboard: 'Panel de pronóstico',
+        tab_predictions: 'Explorador de predicciones',
+        tab_market: 'Factores económicos y de mercado',
+        tab_promotions: 'Análisis de promociones',
+        tab_holidays: 'Calendario de eventos',
+        tab_performance: 'Rendimiento del modelo',
+        tab_modelisation: 'Modelización y características',
+        tab_about: 'Acerca del proyecto',
+      },
+      it: {
+        forecast_date: 'Data di previsione',
+        horizon_28: 'Orizzonte 28 giorni',
+        refresh: 'Aggiorna',
+        dark_mode: 'Modalità scura',
+        light_mode: 'Modalità chiara',
+        analysis: 'Analisi',
+        model: 'Modello',
+        nav_dashboard: 'Dashboard',
+        nav_predictions: 'Esplora previsioni',
+        nav_market: 'Fattori di mercato',
+        nav_promotions: 'Promozioni',
+        nav_holidays: 'Calendario eventi',
+        nav_performance: 'Performance',
+        nav_modelisation: 'Modellazione',
+        nav_about: 'Informazioni',
+        kpi_total: 'Vendite previste (28gg)',
+        kpi_daily: 'Media giornaliera',
+        kpi_items: 'Articoli attivi',
+        kpi_families: 'Famiglie',
+        kpi_oil: 'Prezzo petrolio',
+        kpi_units: 'Unità tutte le famiglie',
+        kpi_per_day: 'unità / giorno',
+        kpi_catalog: 'catalogo di test',
+        kpi_categories: 'categorie prodotti',
+        kpi_wti: 'WTI Greggio / barile',
+        alerts_title: 'Avvisi intelligenti',
+        alerts_empty: 'Nessun avviso attivo — tutto è nella norma.',
+        alerts_refresh: 'Aggiorna',
+        filter_family: 'Filtra per famiglia',
+        filter_all: 'Tutte',
+        filter_search: 'Cerca per N° articolo (es: 103501)…',
+        filter_perishable: 'Deperibilità:',
+        filter_all2: 'Tutti',
+        filter_perish: 'Deperibile',
+        filter_nonperish: 'Non deperibile',
+        filter_reset: 'Reimposta',
+        export_csv: 'Esporta CSV',
+        detail_title: 'Dettaglio articolo',
+        detail_select: 'Seleziona un articolo dalla tabella per vedere i dettagli.',
+        stock_suggest: 'Stock suggerito',
+        reorder_point: 'Punto di riordine',
+        timeline_title: 'Calendario 28gg — Promo & Festività',
+        whatif_title: 'Simulatore What-If — Promos',
+        whatif_desc: 'Attiva/disattiva promozioni giorno per giorno — il modello ricalcola.',
+        whatif_all_on: 'Attiva tutto',
+        whatif_all_off: 'Disattiva tutto',
+        whatif_simulate: 'Simula',
+        whatif_loading: 'Calcolo…',
+        whatif_vs: 'vs attuale',
+        tab_dashboard: 'Dashboard previsioni',
+        tab_predictions: 'Esplora previsioni',
+        tab_market: 'Fattori economici e di mercato',
+        tab_promotions: 'Analisi promozioni',
+        tab_holidays: 'Calendario eventi',
+        tab_performance: 'Performance modello',
+        tab_modelisation: 'Modellazione e feature',
+        tab_about: 'Informazioni sul progetto',
+      }
+    };
+
+    const t = (key) => (i18n[currentLang.value] || i18n.fr)[key] || key;
+
+    const setLang = (code) => {
+      currentLang.value = code;
+      const html = document.documentElement;
+      if (code === 'ar') {
+        html.setAttribute('dir', 'rtl');
+        html.setAttribute('lang', 'ar');
+      } else {
+        html.setAttribute('dir', 'ltr');
+        html.setAttribute('lang', code);
+      }
+      setTimeout(() => lucide.createIcons(), 50);
+    };
+
+    // ===== AMÉLIORATION 5 : Sidebar rétractable =====
+    const sidebarCollapsed = ref(false);
+
+    // ===== AMÉLIORATION 3 : Alertes intelligentes =====
+    const smartAlerts = ref([]);
+
+    const buildSmartAlerts = () => {
+      const alerts = [];
+      // Alerte statut modèle
+      alerts.push({ id:'model-ok', level:'success', title:'28 modèles LightGBM opérationnels', subtitle:'Cache actif — dernière prédiction chargée avec succès.', tag:'ML OK' });
+
+      // Alerte oil price si disponible
+      if (kpiData.value.latestOilPrice && kpiData.value.latestOilPrice < 50) {
+        alerts.push({ id:'oil-low', level:'warning', title:`Prix pétrole bas — $${kpiData.value.latestOilPrice.toFixed(1)}`, subtitle:'Impact potentiel sur les transactions quotidiennes.', tag:'Macro' });
+      }
+
+      // Alerte si ventes très élevées
+      if (kpiData.value.avgDailyForecast > 500) {
+        alerts.push({ id:'high-sales', level:'info', title:`Forte activité prévue — ${Math.round(kpiData.value.avgDailyForecast)} unités/jour`, subtitle:'Volume journalier au-dessus de la normale historique.', tag:'Demande' });
+      }
+
+      // Alertes jours fériés à venir (< 5 jours)
+      const upcomingHolidays = (holidays.value || []).filter(h => !h.is_past && h.days_offset <= 5 && h.days_offset > 0);
+      upcomingHolidays.forEach(h => {
+        alerts.push({
+          id: 'holiday-'+h.date, level: h.is_likely_closed ? 'danger' : 'warning',
+          title: `Jour férié ${h.type} dans ${h.days_offset} jour(s) — ${h.date}`,
+          subtitle: h.is_likely_closed ? 'Magasin probablement fermé — prévisions forcées à 0.' : 'Impact probable sur les ventes.',
+          tag: h.is_likely_closed ? 'Fermé' : 'Férié'
+        });
+      });
+
+      // Alerte familles promos élevées
+      const topPromo = (promoData.value.familyPromoStats || []).find(s => s.promo_ratio > 0.5);
+      if (topPromo) {
+        alerts.push({ id:'promo-high', level:'info', title:`${topPromo.family} — taux promo élevé (${(topPromo.promo_ratio*100).toFixed(0)}%)`, subtitle:'Cette famille est souvent en promotion sur la période.', tag:'Promo' });
+      }
+
+      smartAlerts.value = alerts;
+    };
+
+    const refreshAlerts = () => buildSmartAlerts();
+
+    // ===== AMÉLIORATION 4 : Timeline 28j =====
+    const timeline28 = computed(() => {
+      if (!itemDetails.value) return [];
+      const testDate = new Date(kpiData.value.testingDate || '2017-07-18');
+      return Array.from({length: 28}, (_, i) => {
+        const d = new Date(testDate);
+        d.setDate(d.getDate() + i + 1);
+        const dow = d.getDay(); // 0=Sun, 6=Sat
+        const isPromo = itemDetails.value.promotions ? itemDetails.value.promotions[i] : false;
+        const isWeekend = dow === 0 || dow === 6;
+        const matchingHol = (holidays.value || []).find(h => h.date === d.toISOString().slice(0,10));
+        const isClosed = matchingHol && matchingHol.is_likely_closed;
+        const isHoliday = !!matchingHol;
+
+        let cls = 'normal';
+        if (isClosed) cls = 'closed';
+        else if (isHoliday) cls = 'holiday';
+        else if (isPromo) cls = 'promo';
+        else if (isWeekend) cls = 'weekend';
+
+        const dayNames = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+        let label = dayNames[dow]+' '+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
+        if (isPromo) label += ' · Promo';
+        if (isHoliday) label += ' · Férié '+matchingHol.type;
+        if (isClosed) label += ' · Fermé';
+        return { cls, label };
+      });
+    });
+
+    // ===== AMÉLIORATION 6 : Simulateur What-If =====
+    const simulPromos = ref(Array(28).fill(false));
+    const simulLoading = ref(false);
+    const simulResult = ref(null);
+    const simulDiffPct = ref(0);
+    const simulError = ref('');
+
+    const toggleAllPromos = (val) => {
+      simulPromos.value = Array(28).fill(val);
+    };
+
+    const runSimulation = async () => {
+      if (!selectedItem.value) return;
+      simulLoading.value = true;
+      simulError.value = '';
+      simulResult.value = null;
+      try {
+        const r = await fetch('/api/predictions/simulate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item_nbr: selectedItem.value.item_nbr, promotions: simulPromos.value })
+        });
+        const j = await r.json();
+        if (j.success) {
+          simulResult.value = j.data.predictions;
+          const origTotal = selectedItem.value.total;
+          const simTotal = j.data.predictions.reduce((a,b)=>a+b, 0);
+          simulDiffPct.value = origTotal > 0 ? ((simTotal - origTotal) / origTotal) * 100 : 0;
+        } else {
+          simulError.value = j.error || 'Erreur de simulation.';
+        }
+      } catch(e) {
+        simulError.value = 'Impossible de joindre l\'API de simulation.';
+      } finally {
+        simulLoading.value = false;
+        setTimeout(() => lucide.createIcons(), 50);
+      }
+    };
+
+    // ---- Static data from the report ----
+    const nwrmsleErrors = [
+      {day:1,error:0.3886},{day:2,error:0.3957},{day:3,error:0.3956},{day:4,error:0.4005},
+      {day:5,error:0.4008},{day:6,error:0.4249},{day:7,error:0.4316},{day:8,error:0.4425},
+      {day:9,error:0.4385},{day:10,error:0.4498},{day:11,error:0.4661},{day:12,error:0.4615},
+      {day:13,error:0.4718},{day:14,error:0.4629},{day:15,error:0.4637},{day:16,error:0.4449},
+      {day:17,error:0.4457},{day:18,error:0.4403},{day:19,error:0.4805},{day:20,error:0.4734},
+      {day:21,error:0.4624},{day:22,error:0.4492},{day:23,error:0.4488},{day:24,error:0.4417},
+      {day:25,error:0.4868},{day:26,error:0.5121},{day:27,error:0.4853},{day:28,error:0.4564}
+    ];
+
+    const featureFamilies = [
+      { name:'Calendaires', count:4, icon:'calendar', color:'#6366f1', desc:'day_of_week, is_weekend, is_month_start, is_month_end' },
+      { name:'Stats Article', count:3, icon:'bar-chart-2', color:'#10b981', desc:'item_mean_sales, item_std_sales, sales_vs_family_mean' },
+      { name:'Lags Ventes', count:8, icon:'clock', color:'#f59e0b', desc:'lag_1,3,5,7,14,30,60,140 — dépendance temporelle' },
+      { name:'Rolling Stats', count:10, icon:'activity', color:'#3b82f6', desc:'rolling_mean/std/max/min sur 3,7,14,30,140 jours' },
+      { name:'Transactions', count:8, icon:'users', color:'#8b5cf6', desc:'lags 1,3,7,14 + rolling 7,14,30 + traffic_ratio' },
+      { name:'Prix Pétrole', count:6, icon:'droplet', color:'#06b6d4', desc:'lag 1,3,7 + rolling 7,30 + variation 7j (WTI)' },
+      { name:'Promotions', count:9, icon:'tag', color:'#ec4899', desc:'promo_lag,count,days_since + 3 features futures promo' },
+      { name:'Fériés', count:14, icon:'star', color:'#f97316', desc:'days_since/to_holiday + 9 futures features connues' },
+    ];
+
+    const hyperparams = [
+      { name:'num_leaves', range:'[16, 256]', fill:85, color:'#6366f1' },
+      { name:'max_depth', range:'[3, 15]', fill:60, color:'#10b981' },
+      { name:'min_data_in_leaf', range:'[10, 1000]', fill:70, color:'#f59e0b' },
+      { name:'learning_rate', range:'[0.001, 0.3]', fill:50, color:'#3b82f6' },
+      { name:'feature_fraction', range:'[0.5, 1.0]', fill:65, color:'#8b5cf6' },
+      { name:'bagging_fraction', range:'[0.5, 1.0]', fill:65, color:'#06b6d4' },
+      { name:'lambda_l1 / l2', range:'[1e-8, 100]', fill:45, color:'#ec4899' },
+      { name:'max_bin', range:'[4000, 7000]', fill:90, color:'#f97316' },
+    ];
+
+    const techStack = [
+      { name:'Python', role:'Langage principal', emoji:'🐍' },
+      { name:'LightGBM', role:'28 modèles de régression', emoji:'⚡' },
+      { name:'Polars', role:'DataFrame haute performance', emoji:'🐻‍❄️' },
+      { name:'Optuna', role:'Optimisation bayésienne TPE', emoji:'🔮' },
+      { name:'NumPy', role:'Opérations matricielles', emoji:'🔢' },
+      { name:'Scikit-learn', role:'Transformations log1p/expm1', emoji:'🧬' },
+      { name:'joblib', role:'Sérialisation des modèles .pkl', emoji:'💾' },
+      { name:'Flask + Vue 3', role:'API REST + Tableau de bord', emoji:'🌐' },
+    ];
+
+    const pipelinePhases = [
+      { num:'1', title:'Analyse & Sélection', file:'analyze.ipynb', desc:'Sélection magasin 39, nettoyage, construction du dataset maître', badge:'Données', color:'#6366f1' },
+      { num:'2', title:'Feature Engineering', file:'features_engineering.ipynb', desc:'62 variables prédictives en 8 familles via transformations', badge:'Features', color:'#10b981' },
+      { num:'3', title:'Optimisation Optuna', file:'first_training.ipynb', desc:'Recherche bayésienne des hyperparamètres (50 trials/modèle)', badge:'Optuna', color:'#f59e0b' },
+      { num:'4', title:'Entraînement Final', file:'final_training.ipynb', desc:'28 modèles LightGBM sur Full Train (T+V)', badge:'Training', color:'#3b82f6' },
+      { num:'5', title:'Déploiement', file:'Deploy.py', desc:'Pipeline production avec cache 3 niveaux et API Flask', badge:'Production', color:'#ec4899' },
+    ];
+
+    // Tab titles
+    const activeTabTitle = computed(() => ({
+      'dashboard': t('tab_dashboard'),
+      'predictions': t('tab_predictions'),
+      'market': t('tab_market'),
+      'promotions': t('tab_promotions'),
+      'holidays': t('tab_holidays'),
+      'performance': t('tab_performance'),
+      'modelisation': t('tab_modelisation'),
+      'about': t('tab_about'),
+      'localisation': 'Localisation — Marché de Dylia'
+    }[activeTab.value] || t('tab_dashboard')));
+
+    // Chart instances
+    let mainForecastChart=null, topFamiliesChart=null, historyForecastChart=null;
+    let itemDetailChart=null, marketChart=null, promoDistChart=null;
+    let upcomingPromoChart=null, nwrmsleChart=null, nwrmsleDetailChart=null;
+
+    const setTab = (tab) => {
+      activeTab.value = tab;
+      setTimeout(() => { initTabCharts(); lucide.createIcons(); }, 120);
+    };
+
+    const formatNumber = (num, decimals=0) => {
+      if (num===null||num===undefined) return '---';
+      return new Intl.NumberFormat('fr-FR', { minimumFractionDigits:decimals, maximumFractionDigits:decimals }).format(num);
+    };
+
+    const resetFilters = () => {
+      filters.value = { family:'', item_nbr:null, perishable:'' };
+      offset.value = 0;
+      fetchPredictions(true);
+    };
+
+    const changePage = (dir) => {
+      const n = offset.value + dir * limit.value;
+      if (n>=0 && n<totalPredictions.value) { offset.value = n; fetchPredictions(false); }
+    };
+
+    // API
+    const fetchKPIs = async () => {
+      try {
+        const r = await fetch('/api/kpi-summary');
+        const j = await r.json();
+        if (j.success) kpiData.value = j.data;
+      } catch(e) { console.error(e); }
+    };
+
+    const fetchPredictions = async (resetOffset=false) => {
+      if (resetOffset) offset.value = 0;
+      loading.value = true;
+      try {
+        let url = `/api/predictions?limit=${limit.value}&offset=${offset.value}`;
+        if (filters.value.family) url += `&family=${encodeURIComponent(filters.value.family)}`;
+        if (filters.value.item_nbr) url += `&item_nbr=${encodeURIComponent(filters.value.item_nbr)}`;
+        if (filters.value.perishable !== '') url += `&perishable=${encodeURIComponent(filters.value.perishable)}`;
+        const r = await fetch(url);
+        const j = await r.json();
+        if (j.success) {
+          predictions.value = j.data;
+          totalPredictions.value = j.pagination.total;
+          if (predictions.value.length > 0 && !selectedItem.value) selectItem(predictions.value[0]);
+        }
+      } catch(e) { error.value='Impossible de charger les prévisions'; console.error(e); }
+      finally { loading.value=false; setTimeout(()=>lucide.createIcons(), 50); }
+    };
+
+    let debounceTimeout = null;
+    const debouncedFetchPredictions = () => {
+      clearTimeout(debounceTimeout);
+      debounceTimeout = setTimeout(() => fetchPredictions(true), 350);
+    };
+
+    const selectItem = async (item) => {
+      selectedItem.value = item;
+      itemDetails.value = null;
+      simulResult.value = null;
+      simulError.value = '';
+      simulDiffPct.value = 0;
+      try {
+        const r = await fetch(`/api/predictions/details?item_nbr=${item.item_nbr}`);
+        const j = await r.json();
+        if (j.success) {
+          itemDetails.value = j.data;
+          // Init simulPromos from actual promotions
+          simulPromos.value = j.data.promotions ? [...j.data.promotions] : Array(28).fill(false);
+        }
+      } catch(e) { console.error(e); }
+      setTimeout(() => { renderItemDetailChart(); lucide.createIcons(); }, 100);
+    };
+
+    const fetchFamilies = async () => {
+      try {
+        const r = await fetch('/api/items');
+        const j = await r.json();
+        if (j.success) {
+          const u = new Set(j.data.map(i => i.family));
+          families.value = Array.from(u).sort();
+        }
+      } catch(e) { console.error(e); }
+    };
+
+    const fetchHolidays = async () => {
+      try {
+        const r = await fetch('/api/holidays');
+        const j = await r.json();
+        if (j.success) holidays.value = j.data;
+      } catch(e) { console.error(e); }
+    };
+
+    const fetchMarketData = async () => {
+      try {
+        const r = await fetch('/api/market-data?days=90');
+        const j = await r.json();
+        if (j.success) marketData.value = j.data;
+      } catch(e) { console.error(e); }
+    };
+
+    const fetchPromoData = async () => {
+      try {
+        const r = await fetch('/api/promotions');
+        const j = await r.json();
+        if (j.success) promoData.value = j.data;
+      } catch(e) { console.error(e); }
+    };
+
+    const exportCSV = () => {
+      let csv = 'data:text/csv;charset=utf-8,';
+      csv += 'Numéro Article,Famille,Classe,Périsable,Total Prévu (28j)\n';
+      predictions.value.forEach(r => {
+        csv += `${r.item_nbr},"${r.family}",${r.class},${r.perishable},${r.total}\n`;
+      });
+      const link = document.createElement('a');
+      link.href = encodeURI(csv);
+      link.download = `previsions_dylia_${kpiData.value.testingDate}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    // ---- Chart renderers ----
+    const initTabCharts = () => {
+      if (activeTab.value==='dashboard') {
+        renderMainForecastChart();
+        renderTopFamiliesChart();
+        renderHistoryForecastChart();
+        renderNWRMSLEChart();
+      } else if (activeTab.value==='predictions') {
+        if (selectedItem.value) renderItemDetailChart();
+      } else if (activeTab.value==='market') {
+        renderMarketChart();
+      } else if (activeTab.value==='promotions') {
+        renderPromoDistChart();
+        renderUpcomingPromoChart();
+      } else if (activeTab.value==='performance') {
+        renderNWRMSLEDetailChart();
+      } else if (activeTab.value==='localisation') {
+        setTimeout(() => initMap(), 150);
+      }
+    };
+
+    const chartDefaults = (height=300) => ({
+      chart: { height, background:'transparent', foreColor:'#94a3b8', toolbar:{show:false}, fontFamily:'Inter, sans-serif' },
+      grid: { borderColor:'rgba(255,255,255,0.04)', xaxis:{lines:{show:false}} },
+      tooltip: { theme:'dark' }
+    });
+
+    const renderMainForecastChart = async () => {
+      try {
+        const r = await fetch('/api/predictions/summary');
+        const j = await r.json();
+        if (!j.success) return;
+        const dates = j.data.dailyForecast.map(d=>d.date);
+        const sales = j.data.dailyForecast.map(d=>d.sales);
+        const opts = {
+          ...chartDefaults(300),
+          series: [{ name:'Ventes Prévues', data:sales }],
+          chart: { ...chartDefaults(300).chart, type:'area' },
+          colors: ['#6366f1'],
+          fill: { type:'gradient', gradient:{shadeIntensity:1,opacityFrom:0.45,opacityTo:0.02,stops:[0,100]} },
+          stroke: { curve:'smooth', width:3 },
+          dataLabels: { enabled:false },
+          xaxis: { categories:dates, type:'datetime', axisBorder:{show:false}, axisTicks:{show:false} },
+          yaxis: { labels:{ formatter:v=>formatNumber(v) } },
+          tooltip: { theme:'dark', x:{format:'dd MMM yyyy'} }
+        };
+        if (mainForecastChart) mainForecastChart.destroy();
+        mainForecastChart = new ApexCharts(document.querySelector('#chart-main-forecast'), opts);
+        mainForecastChart.render();
+      } catch(e) { console.error(e); }
+    };
+
+    const renderTopFamiliesChart = () => {
+      const top = kpiData.value.topFamilies || [];
+      const opts = {
+        ...chartDefaults(260),
+        series: [{ name:'Unités Prévues', data:top.map(t=>Math.round(t.sales)) }],
+        chart: { ...chartDefaults(260).chart, type:'bar' },
+        colors: ['#4f46e5'],
+        plotOptions: { bar:{ borderRadius:6, horizontal:true, barHeight:'60%' } },
+        xaxis: { categories:top.map(t=>t.family), axisBorder:{show:false}, labels:{formatter:v=>formatNumber(v)} },
+        dataLabels: { enabled:true, textAnchor:'start', style:{colors:['#fff'],fontSize:'10px'}, formatter:v=>formatNumber(v), offsetX:8 },
+        tooltip: { theme:'dark' }
+      };
+      if (topFamiliesChart) topFamiliesChart.destroy();
+      const el = document.querySelector('#chart-top-families');
+      if (el) { topFamiliesChart = new ApexCharts(el, opts); topFamiliesChart.render(); }
+    };
+
+    const renderHistoryForecastChart = async () => {
+      try {
+        const [hR, pR] = await Promise.all([fetch('/api/sales-history?days=60'), fetch('/api/predictions/summary')]);
+        const hJ = await hR.json(); const pJ = await pR.json();
+        if (!hJ.success||!pJ.success) return;
+        const histData = hJ.data.map(d=>({x:new Date(d.date).getTime(),y:d.sales}));
+        const predData = pJ.data.dailyForecast.map(d=>({x:new Date(d.date).getTime(),y:d.sales}));
+        if (histData.length>0&&predData.length>0)
+          predData.unshift({x:histData[histData.length-1].x, y:histData[histData.length-1].y});
+        const opts = {
+          ...chartDefaults(250),
+          series: [
+            { name:'Historique', data:histData },
+            { name:'Prévision', data:predData }
+          ],
+          chart: { ...chartDefaults(250).chart, type:'line' },
+          colors: ['#64748b','#6366f1'],
+          stroke: { width:[2,3], curve:'smooth', dashArray:[0,5] },
+          xaxis: { type:'datetime', axisBorder:{show:false} },
+          yaxis: { labels:{ formatter:v=>formatNumber(v) } },
+          tooltip: { theme:'dark', x:{format:'dd MMM yyyy'} }
+        };
+        if (historyForecastChart) historyForecastChart.destroy();
+        const el = document.querySelector('#chart-history-forecast');
+        if (el) { historyForecastChart = new ApexCharts(el, opts); historyForecastChart.render(); }
+      } catch(e) { console.error(e); }
+    };
+
+    const renderNWRMSLEChart = () => {
+      const errors = nwrmsleErrors.map(h=>h.error);
+      const opts = {
+        series: [{ name:'NWRMSLE', data:errors }],
+        chart: { type:'area', height:50, background:'transparent', foreColor:'#94a3b8', sparkline:{enabled:true} },
+        stroke: { curve:'smooth', width:1.5 },
+        fill: { type:'gradient', gradient:{shadeIntensity:1,opacityFrom:0.25,opacityTo:0.02,stops:[0,100]} },
+        colors: ['#a855f7'],
+        tooltip: { fixed:{enabled:false}, x:{show:true,formatter:v=>`Jour ${v}`}, y:{title:{formatter:()=>'NWRMSLE: '}}, theme:'dark' }
+      };
+      if (nwrmsleChart) nwrmsleChart.destroy();
+      const el = document.querySelector('#chart-nwrmsle');
+      if (el) { nwrmsleChart = new ApexCharts(el, opts); nwrmsleChart.render(); }
+    };
+
+    const renderNWRMSLEDetailChart = () => {
+      const days = nwrmsleErrors.map(h=>'J'+h.day);
+      const vals = nwrmsleErrors.map(h=>h.error);
+      const colors = vals.map(v => v<0.41?'#34d399':v<0.47?'#fbbf24':'#f87171');
+      const opts = {
+        ...chartDefaults(320),
+        series: [{ name:'NWRMSLE', data:vals }],
+        chart: { ...chartDefaults(320).chart, type:'bar' },
+        colors: colors,
+        plotOptions: { bar:{ borderRadius:4, columnWidth:'70%', distributed:true } },
+        legend: { show:false },
+        xaxis: { categories:days, axisBorder:{show:false}, labels:{style:{fontSize:'10px'}} },
+        yaxis: { min:0.35, max:0.55, labels:{ formatter:v=>v.toFixed(3) } },
+        annotations: {
+          yaxis: [{ y:0.4487, borderColor:'#6366f1', label:{text:'Moy. 0.4487',style:{color:'#6366f1',background:'transparent',fontSize:'10px'}} }]
+        },
+        dataLabels: { enabled:false },
+        tooltip: { theme:'dark', y:{ formatter:v=>v.toFixed(4) } }
+      };
+      if (nwrmsleDetailChart) nwrmsleDetailChart.destroy();
+      const el = document.querySelector('#chart-nwrmsle-detailed');
+      if (el) { nwrmsleDetailChart = new ApexCharts(el, opts); nwrmsleDetailChart.render(); }
+    };
+
+    const renderItemDetailChart = () => {
+      if (!selectedItem.value) return;
+      
+      const el = document.querySelector('#chart-item-detail');
+      if (!el) return;
+      
+      if (itemDetailChart) itemDetailChart.destroy();
+      
+      if (itemDetails.value && itemDetails.value.history) {
+        const histData = itemDetails.value.history.map(d => ({
+          x: new Date(d.date).getTime(),
+          y: d.sales
+        }));
+        
+        const testDate = new Date(kpiData.value.testingDate);
+        const predData = itemDetails.value.predictions.map((p, i) => {
+          const d = new Date(testDate);
+          d.setDate(d.getDate() + (i + 1));
+          return { x: d.getTime(), y: p };
+        });
+        
+        // Connect prediction starting point with last history point to make line continuous
+        if (histData.length > 0 && predData.length > 0) {
+          predData.unshift({ x: histData[histData.length - 1].x, y: histData[histData.length - 1].y });
+        }
+        
+        const opts = {
+          ...chartDefaults(220),
+          series: [
+            { name: 'Historique (30j)', data: histData },
+            { name: 'Prévision (28j)', data: predData }
+          ],
+          chart: { ...chartDefaults(220).chart, type: 'line' },
+          colors: ['#64748b', '#818cf8'],
+          stroke: { width: [2, 3], curve: 'smooth', dashArray: [0, 5] },
+          xaxis: { type: 'datetime', axisBorder: { show: false } },
+          yaxis: { labels: { formatter: v => formatNumber(v, 1) } },
+          tooltip: { theme: 'dark', x: { format: 'dd MMM yyyy' } }
+        };
+        
+        itemDetailChart = new ApexCharts(el, opts);
+        itemDetailChart.render();
+      } else {
+        const preds = selectedItem.value.predictions;
+        const cats = Array.from({length:28},(_,i)=>`J${i+1}`);
+        const opts = {
+          ...chartDefaults(200),
+          series: [{ name: 'Unités Prévues', data: preds }],
+          chart: { ...chartDefaults(200).chart, type: 'area' },
+          colors: ['#818cf8'],
+          fill: { type: 'gradient', gradient: { opacityFrom: 0.35, opacityTo: 0.02 } },
+          stroke: { curve: 'smooth', width: 2.5 },
+          dataLabels: { enabled: false },
+          xaxis: { categories: cats, axisBorder: { show: false }, labels: { show: false } },
+          tooltip: { theme: 'dark', y: { formatter: v => formatNumber(v, 1) } }
+        };
+        itemDetailChart = new ApexCharts(el, opts);
+        itemDetailChart.render();
+      }
+    };
+
+    const renderMarketChart = () => {
+      const dates = marketData.value.map(d=>d.date);
+      const oil = marketData.value.map(d=>d.oil_price);
+      const trans = marketData.value.map(d=>d.transactions);
+      const opts = {
+        ...chartDefaults(350),
+        series: [
+          { name:'Transactions (G)', type:'line', data:trans },
+          { name:'Pétrole WTI (D)', type:'area', data:oil }
+        ],
+        chart: { ...chartDefaults(350).chart, type:'line' },
+        colors: ['#6366f1','#10b981'],
+        stroke: { width:[3,2], curve:'smooth' },
+        fill: { type:['solid','gradient'], gradient:{opacityFrom:0.25,opacityTo:0.02} },
+        xaxis: { categories:dates, type:'datetime', axisBorder:{show:false} },
+        yaxis: [
+          { title:{text:'Transactions',style:{color:'#6366f1',fontSize:'11px'}}, labels:{formatter:v=>formatNumber(v)} },
+          { opposite:true, title:{text:'WTI ($)',style:{color:'#10b981',fontSize:'11px'}}, labels:{formatter:v=>formatNumber(v,1)+'$'} }
+        ],
+        tooltip: { theme:'dark', x:{format:'dd MMM yyyy'} }
+      };
+      if (marketChart) marketChart.destroy();
+      const el = document.querySelector('#chart-market-oil-transactions');
+      if (el) { marketChart = new ApexCharts(el, opts); marketChart.render(); }
+    };
+
+    const renderPromoDistChart = () => {
+      const stats = promoData.value.familyPromoStats || [];
+      const opts = {
+        ...chartDefaults(300),
+        series: [{ name:'Taux promo (%)', data:stats.map(s=>(s.promo_ratio*100).toFixed(1)) }],
+        chart: { ...chartDefaults(300).chart, type:'bar' },
+        colors: ['#f59e0b'],
+        plotOptions: { bar:{ borderRadius:4, columnWidth:'55%' } },
+        xaxis: { categories:stats.map(s=>s.family), labels:{rotate:-40,style:{fontSize:'10px'}}, axisBorder:{show:false} },
+        yaxis: { labels:{ formatter:v=>v+'%' } },
+        tooltip: { theme:'dark' }
+      };
+      if (promoDistChart) promoDistChart.destroy();
+      const el = document.querySelector('#chart-promo-distribution');
+      if (el) { promoDistChart = new ApexCharts(el, opts); promoDistChart.render(); }
+    };
+
+    const renderUpcomingPromoChart = () => {
+      const tl = promoData.value.upcomingPromoTimeline || [];
+      const opts = {
+        ...chartDefaults(250),
+        series: [{ name:'Articles en promo', data:tl.map(t=>t.promo_count) }],
+        chart: { ...chartDefaults(250).chart, type:'area' },
+        colors: ['#a855f7'],
+        fill: { type:'gradient', gradient:{opacityFrom:0.3,opacityTo:0.01} },
+        stroke: { curve:'smooth', width:2.5 },
+        dataLabels: { enabled:false },
+        xaxis: { categories:tl.map(t=>t.date), type:'datetime', axisBorder:{show:false} },
+        tooltip: { theme:'dark', x:{format:'dd MMM yyyy'} }
+      };
+      if (upcomingPromoChart) upcomingPromoChart.destroy();
+      const el = document.querySelector('#chart-upcoming-promo-timeline');
+      if (el) { upcomingPromoChart = new ApexCharts(el, opts); upcomingPromoChart.render(); }
+    };
+
+    // ===== CARTE LEAFLET — Marché de Dylia, Tizi-Ouzou =====
+    // Dylia Market, Tizi-Ouzou, Algérie — coordonnées précises
+    const DYLIA_LAT = 36.7156;
+    const DYLIA_LNG = 4.0497;
+    let leafletMap = null;
+
+    const initMap = () => {
+      const el = document.getElementById('map-dylia');
+      if (!el || typeof L === 'undefined') return;
+      if (leafletMap) { leafletMap.remove(); leafletMap = null; }
+
+      leafletMap = L.map('map-dylia', { zoomControl: true, scrollWheelZoom: true }).setView([DYLIA_LAT, DYLIA_LNG], 14);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(leafletMap);
+
+      // Marqueur principal — Marché de Dylia, Tizi-Ouzou
+      const pulseIcon = L.divIcon({
+        className: '',
+        html: `<div style="position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
+          <div class="map-marker-pulse" style="position:absolute;width:18px;height:18px;border-radius:50%;background:#6366f1;"></div>
+          <div style="position:absolute;width:36px;height:36px;border-radius:50%;background:rgba(99,102,241,0.2);border:2px solid rgba(99,102,241,0.5);"></div>
+        </div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        popupAnchor: [0, -20]
+      });
+
+      L.marker([DYLIA_LAT, DYLIA_LNG], { icon: pulseIcon })
+        .addTo(leafletMap)
+        .bindPopup(`
+          <div style="padding:4px 2px;">
+            <p style="font-weight:700;font-size:14px;color:#a5b4fc;margin:0 0 4px;">🏪 Dylia Market</p>
+            <p style="color:#94a3b8;margin:0 0 2px;font-size:12px;">📍 Dylia, Tizi-Ouzou — Algérie</p>
+            <p style="color:#94a3b8;margin:0;font-size:11px;">Lat: ${DYLIA_LAT.toFixed(4)} · Lng: ${DYLIA_LNG.toFixed(4)}</p>
+            <hr style="border-color:rgba(255,255,255,0.08);margin:8px 0;">
+            <p style="color:#64748b;font-size:11px;margin:0;">Proxy dataset : Magasin 39, Cuenca, Équateur</p>
+          </div>
+        `, { maxWidth: 240 })
+        .openPopup();
+
+      // Cercle de zone de chalandise (~1km)
+      L.circle([DYLIA_LAT, DYLIA_LNG], {
+        radius: 1000,
+        color: '#6366f1',
+        fillColor: '#6366f1',
+        fillOpacity: 0.05,
+        weight: 1.5,
+        dashArray: '6 4'
+      }).addTo(leafletMap).bindTooltip('Zone de chalandise ~1km', { direction: 'top', className: '' });
+
+      setTimeout(() => lucide.createIcons(), 100);
+    };
+
+    const refreshAll = async () => {
+      loading.value = true;
+      error.value = null;
+      try {
+        await Promise.all([fetchKPIs(),fetchPredictions(),fetchFamilies(),fetchHolidays(),fetchMarketData(),fetchPromoData()]);
+        initTabCharts();
+        setTimeout(() => buildSmartAlerts(), 200);
+      } catch(e) { error.value='Erreur lors du chargement des données.'; }
+      finally { loading.value=false; }
+    };
+
+    onMounted(() => {
+      refreshAll();
+      setTimeout(() => lucide.createIcons(), 300);
+    });
+
+    return {
+      activeTab, activeTabTitle, loading, error, kpiData,
+      predictions, totalPredictions, offset, limit, selectedItem, itemDetails,
+      filters, families, holidays, marketData, promoData,
+      nwrmsleErrors, featureFamilies, hyperparams, techStack, pipelinePhases,
+      setTab, formatNumber, resetFilters, changePage,
+      debouncedFetchPredictions, fetchPredictions, selectItem, exportCSV, refreshAll,
+      sidebarCollapsed,
+      smartAlerts, refreshAlerts,
+      timeline28,
+      simulPromos, simulLoading, simulResult, simulDiffPct, simulError,
+      toggleAllPromos, runSimulation,
+      // Theme + Lang
+      isDark, toggleTheme,
+      langs, currentLang, setLang, t,
+      // New features
+      openAiSummary: () => openAiSummary(),
+      exportPDF: () => exportPDF(),
+      toggleChatbot: () => toggleChatbot()
+    };
+  }
+}).mount('#app');
+
+// ========================================
+// FORECAST CONTEXT — données API Flask
+// ========================================
+let _forecastCtxCache = null;
+
+async function fetchForecastContext() {
+  if (_forecastCtxCache) return _forecastCtxCache;
+
+  try {
+    const [kpiRes, summaryRes] = await Promise.all([
+      fetch('/api/kpi-summary'),
+      fetch('/api/predictions/summary')
+    ]);
+
+    const kpiJson    = kpiRes.ok    ? await kpiRes.json()    : null;
+    const sumJson    = summaryRes.ok ? await summaryRes.json() : null;
+
+    const kpi  = kpiJson?.data  || {};
+    const sum  = sumJson?.data  || {};
+
+    // ---- KPI block ----
+    const kpiBlock = kpi.totalForecastedSales != null ? `
+=== KPIs GLOBAUX ===
+- Ventes totales prévues (28 j) : ${Math.round(kpi.totalForecastedSales).toLocaleString('fr-FR')} unités
+- Moyenne journalière prévue    : ${Math.round(kpi.avgDailyForecast).toLocaleString('fr-FR')} unités/jour
+- Ventes historiques (30 j)     : ${Math.round(kpi.totalHistoricalSales30d).toLocaleString('fr-FR')} unités
+- Nombre d'articles uniques     : ${kpi.uniqueItems}
+- Nombre de familles            : ${kpi.uniqueFamilies}
+- Date de référence             : ${kpi.testingDate || 'N/A'}
+${kpi.latestOilPrice != null ? `- Prix du pétrole (dernier) : ${kpi.latestOilPrice.toFixed(2)} USD/bbl` : ''}
+${kpi.latestTransactions != null ? `- Transactions (dernier jour) : ${kpi.latestTransactions.toLocaleString('fr-FR')}` : ''}` : '';
+
+    // ---- Top familles ----
+    let topFamBlock = '';
+    if (kpi.topFamilies && kpi.topFamilies.length > 0) {
+      topFamBlock = '\n=== TOP 5 FAMILLES (ventes prévues 28 j) ===\n';
+      kpi.topFamilies.forEach((f, i) => {
+        topFamBlock += `${i+1}. ${f.family} : ${Math.round(f.sales).toLocaleString('fr-FR')} unités\n`;
+      });
+    }
+
+    // ---- Prévisions journalières globales ----
+    let dailyBlock = '';
+    if (sum.dailyForecast && sum.dailyForecast.length > 0) {
+      dailyBlock = '\n=== PRÉVISIONS JOURNALIÈRES (toutes familles) ===\n';
+      sum.dailyForecast.forEach(d => {
+        dailyBlock += `  J${String(d.day).padStart(2,'0')} (${d.date}) : ${Math.round(d.sales).toLocaleString('fr-FR')} unités\n`;
+      });
+    }
+
+    // ---- Prévisions par famille ----
+    let famBlock = '';
+    if (sum.familyForecast) {
+      famBlock = '\n=== PRÉVISIONS PAR FAMILLE (total 28 j + répartition) ===\n';
+      const sorted = Object.entries(sum.familyForecast).sort((a,b) => b[1].total - a[1].total);
+      sorted.forEach(([fname, fdata]) => {
+        const dailyAvg = (fdata.total / 28).toFixed(1);
+        const peakDay  = fdata.daily.indexOf(Math.max(...fdata.daily)) + 1;
+        famBlock += `  ${fname} — Total: ${Math.round(fdata.total).toLocaleString('fr-FR')} · Moy/j: ${dailyAvg} · Pic: J${peakDay}\n`;
+      });
+    }
+
+    _forecastCtxCache = `${kpiBlock}${topFamBlock}${dailyBlock}${famBlock}`.trim();
+    return _forecastCtxCache;
+  } catch(e) {
+    console.warn('fetchForecastContext error:', e);
+    return '';
+  }
+}
+
+// Préchargement silencieux au démarrage
+document.addEventListener('DOMContentLoaded', () => { fetchForecastContext(); });
+
+// ========================================
+// CHATBOT — Ollama llama3.1:8b
+// ========================================
+let voiceEnabled = false;
+let chatHistory = [];
+
+function toggleChatbot() {
+  const panel = document.getElementById('chatbot-panel');
+  const isOpen = panel.style.display === 'flex';
+  panel.style.display = isOpen ? 'none' : 'flex';
+  if (!isOpen) {
+    // Rafraîchir le contexte en arrière-plan à chaque ouverture
+    _forecastCtxCache = null;
+    fetchForecastContext();
+    setTimeout(() => {
+      document.getElementById('chatbot-input').focus();
+      lucide.createIcons();
+    }, 80);
+  }
+}
+
+function closeChatbot() {
+  document.getElementById('chatbot-panel').style.display = 'none';
+}
+
+function toggleVoice() {
+  voiceEnabled = !voiceEnabled;
+  const btn = document.getElementById('btn-voice-toggle');
+  if (voiceEnabled) {
+    btn.classList.add('voice-on');
+    btn.title = 'Voix activée — cliquer pour désactiver';
+  } else {
+    btn.classList.remove('voice-on');
+    btn.title = 'Activer la voix';
+    window.speechSynthesis && window.speechSynthesis.cancel();
+  }
+}
+
+function speakText(text) {
+  if (!voiceEnabled || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const clean = text.replace(/[*_`#]/g, '').trim();
+  const utter = new SpeechSynthesisUtterance(clean);
+  const langCode = document.documentElement.getAttribute('lang') || 'fr';
+  const voices = window.speechSynthesis.getVoices();
+  const match = voices.find(v => v.lang.startsWith(langCode));
+  if (match) utter.voice = match;
+  utter.rate = 0.95;
+  utter.pitch = 1;
+  window.speechSynthesis.speak(utter);
+}
+
+function clearChatbot() {
+  chatHistory = [];
+  const msgs = document.getElementById('chatbot-messages');
+  msgs.innerHTML = `<div style="display:flex;gap:8px;align-items:flex-start;">
+    <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#059669,#047857);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+      <i data-lucide="bot" style="width:14px;height:14px;color:white;"></i>
+    </div>
+    <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.15);border-radius:12px 12px 12px 4px;padding:10px 14px;max-width:85%;">
+      <p style="font-size:13px;color:#e2e8f0;margin:0;line-height:1.5;">Conversation réinitialisée. Comment puis-je vous aider ?</p>
+    </div>
+  </div>`;
+  lucide.createIcons();
+}
+
+function appendUserMsg(text) {
+  const msgs = document.getElementById('chatbot-messages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg-user';
+  div.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function appendBotMsg(text) {
+  const msgs = document.getElementById('chatbot-messages');
+  const typing = document.getElementById('chat-typing');
+  if (typing) typing.remove();
+  const div = document.createElement('div');
+  div.className = 'chat-msg-bot';
+  div.innerHTML = `<div class="avatar"><i data-lucide="bot" style="width:14px;height:14px;color:white;"></i></div>
+    <div class="bubble">${escapeHtml(text)}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  lucide.createIcons();
+  speakText(text);
+}
+
+function showTyping() {
+  const msgs = document.getElementById('chatbot-messages');
+  const div = document.createElement('div');
+  div.id = 'chat-typing';
+  div.className = 'chat-msg-bot';
+  div.innerHTML = `<div class="avatar"><i data-lucide="bot" style="width:14px;height:14px;color:white;"></i></div>
+    <div class="bubble"><div class="chat-typing"><span></span><span></span><span></span></div></div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  lucide.createIcons();
+}
+
+function escapeHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chatbot-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  appendUserMsg(text);
+  showTyping();
+
+  chatHistory.push({ role: 'user', content: text });
+
+  // Récupération des données de prévision en temps réel
+  const forecastData = await fetchForecastContext();
+
+  const systemCtx = `Tu es l'assistant IA du Dylia Market, situé à Tizi-Ouzou, Algérie.
+Tu aides les gestionnaires du marché à comprendre les prévisions de ventes générées par 28 modèles LightGBM (horizon 28 jours, NWRMSLE=0.4487).
+Le dataset proxy utilisé est le Magasin 39 de Cuenca (Équateur).
+
+Tu as accès aux données de prévision RÉELLES et ACTUELLES du tableau de bord. Utilise-les pour répondre précisément aux questions sur les ventes prévues, les familles de produits, les tendances journalières, etc.
+
+${forecastData ? `--- DONNÉES DE PRÉVISION EN TEMPS RÉEL ---\n${forecastData}\n--- FIN DES DONNÉES ---` : '(Données de prévision temporairement indisponibles)'}
+
+Règles :
+- Réponds de façon concise, professionnelle et utile en utilisant les données ci-dessus quand pertinent.
+- Si on te demande les prévisions d'un produit, d'une famille ou d'un jour spécifique, utilise les données fournies.
+- Si on te pose des questions hors contexte marché/ML, réponds quand même poliment.
+- Cite les chiffres exacts des données quand tu les utilises.`;
+
+  const statusEl = document.getElementById('chatbot-status');
+  try {
+    if (statusEl) statusEl.textContent = '⟳ Génération…';
+
+    const response = await fetch('http://localhost:11434/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama3.1:8b',
+        messages: [{ role: 'system', content: systemCtx }, ...chatHistory],
+        stream: false
+      })
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const reply = data.message?.content || data.response || 'Pas de réponse.';
+    chatHistory.push({ role: 'assistant', content: reply });
+    appendBotMsg(reply);
+    if (statusEl) statusEl.textContent = '● llama3.1:8b · Ollama local';
+  } catch(err) {
+    const typing = document.getElementById('chat-typing');
+    if (typing) typing.remove();
+    appendBotMsg('⚠️ Ollama non disponible. Démarrez-le avec :\n\nOLLAMA_ORIGINS=* ollama serve\n\nEt installez le modèle :\nollama pull llama3.1:8b');
+    if (statusEl) statusEl.textContent = '✕ Ollama non disponible';
+  }
+}
+
+// ========================================
+// EXPORT PDF — window.print()
+// ========================================
+function exportPDF() {
+  const style = document.createElement('style');
+  style.id = 'print-override';
+  style.textContent = `@media print {
+    #chatbot-panel, #ai-summary-modal { display:none!important; }
+    #app-sidebar { width:180px!important; }
+    body { background:#fff!important; color:#000!important; }
+    .glass { background:#f8fafc!important; border-color:#e2e8f0!important; }
+    .grad-text { -webkit-text-fill-color:#1e293b!important; }
+  }`;
+  document.head.appendChild(style);
+  window.print();
+  setTimeout(() => { const el = document.getElementById('print-override'); if(el) el.remove(); }, 2500);
+}
+
+// ========================================
+// AI SUMMARY — Language picker + Ollama
+// ========================================
+const SUMMARY_LANG_NAMES = {
+  fr: 'français', en: 'English', ar: 'arabe (العربية)',
+  es: 'español', it: 'italiano'
+};
+const SUMMARY_LANG_FLAGS = {
+  fr:'🇫🇷', en:'🇬🇧', ar:'🇩🇿', es:'🇪🇸', it:'🇮🇹'
+};
+
+function openAiSummary() {
+  const modal = document.getElementById('ai-summary-modal');
+  modal.style.display = 'flex';
+  // Always start at language picker
+  showSummarySection('picker');
+  lucide.createIcons();
+}
+
+function closeAiSummary() {
+  document.getElementById('ai-summary-modal').style.display = 'none';
+}
+
+function backToLangPicker() {
+  showSummarySection('picker');
+}
+
+function showSummarySection(section) {
+  const picker  = document.getElementById('summary-lang-picker');
+  const loading = document.getElementById('summary-loading');
+  const result  = document.getElementById('summary-result');
+  const errBlock= document.getElementById('summary-error-block');
+  const footer  = document.getElementById('summary-footer');
+
+  picker.style.display   = section === 'picker'  ? 'flex'  : 'none';
+  loading.style.display  = section === 'loading' ? 'flex'  : 'none';
+  result.style.display   = section === 'result'  ? 'flex'  : 'none';
+  errBlock.style.display = section === 'error'   ? 'flex'  : 'none';
+  footer.style.display   = section === 'result'  ? 'flex'  : 'none';
+
+  if (section === 'picker')  picker.style.flexDirection = 'column';
+  if (section === 'loading') loading.style.flexDirection = 'column';
+  if (section === 'result')  result.style.flexDirection = 'column';
+  if (section === 'error')   errBlock.style.flexDirection = 'column';
+  if (section === 'result')  footer.style.flexDirection = 'row';
+  lucide.createIcons();
+}
+
+async function generateAiSummary(lang) {
+  showSummarySection('loading');
+
+  const langName = SUMMARY_LANG_NAMES[lang] || 'français';
+  const flag = SUMMARY_LANG_FLAGS[lang] || '';
+  const loadTxt = document.getElementById('summary-loading-text');
+  if (loadTxt) loadTxt.textContent = `Récupération des données…`;
+
+  // Fetch forecast data from API
+  let forecastData = '';
+  let kpiData = {};
+  let summaryData = {};
+  try {
+    const [kpiRes, sumRes] = await Promise.all([
+      fetch('/api/kpi-summary'),
+      fetch('/api/predictions/summary')
+    ]);
+    const kpiJson = kpiRes.ok ? await kpiRes.json() : null;
+    const sumJson = sumRes.ok ? await sumRes.json() : null;
+    kpiData    = kpiJson?.data  || {};
+    summaryData = sumJson?.data || {};
+    forecastData = await fetchForecastContext();
+  } catch(e) {
+    console.warn('API data fetch error for summary:', e);
+  }
+
+  if (loadTxt) loadTxt.textContent = `Génération en ${langName}…`;
+
+  const isRTL = lang === 'ar';
+  const prompt = buildSummaryPrompt(langName, lang, forecastData, kpiData, summaryData);
+
+  try {
+    const response = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'llama3.1:8b', prompt, stream: false })
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const text = data.response || 'Résumé non disponible.';
+
+    const textEl = document.getElementById('summary-text');
+    textEl.textContent = text;
+    textEl.dataset.raw = text;
+    textEl.style.direction = isRTL ? 'rtl' : 'ltr';
+    textEl.style.textAlign = isRTL ? 'right' : 'left';
+
+    const label = document.getElementById('summary-result-label');
+    if (label) label.textContent = `${flag} Résumé en ${langName} · llama3.1:8b`;
+
+    showSummarySection('result');
+  } catch(err) {
+    const errMsg = document.getElementById('summary-error-msg');
+    if (errMsg) errMsg.textContent = 'Assurez-vous qu\'Ollama tourne avec :\nOLLAMA_ORIGINS=* ollama serve\n\nEt que llama3.1:8b est installé :\nollama pull llama3.1:8b';
+    showSummarySection('error');
+  }
+}
+
+function buildSummaryPrompt(langName, langCode, forecastData, kpiData, summaryData) {
+  const prompts = {
+    fr: {
+      intro: `Tu es un analyste BI spécialisé en retail. Génère un résumé exécutif COMPLET et professionnel EN FRANÇAIS du tableau de bord "Dylia Market" (Tizi-Ouzou, Algérie).`,
+      context_label: `Contexte du projet :`,
+      context: [
+        `- Marché : Dylia Market, Tizi-Ouzou, Algérie`,
+        `- Modèle ML : 28 modèles LightGBM indépendants (approche directe DIRECT)`,
+        `- Score NWRMSLE moyen : 0.4487 (meilleur J1=0.389, pire J26=0.512)`,
+        `- Horizon prévisionnel : 28 jours`,
+        `- Dataset proxy : Magasin 39, Cuenca, Équateur (sélection par distance normalisée)`,
+        `- 62 features en 8 familles (calendaires, lags, rolling stats, transactions, pétrole, promotions, fériés, stats article)`,
+        `- Optimisation Optuna : 50 essais × 28 modèles = 1 400 évaluations`,
+        `- Features futures connues : 9 variables (promos, jours fériés, week-ends)`,
+        `- Entraînement final : 2 min 25 sec · Cache triple niveau actif`
+      ].join('\n'),
+      data_header: `=== DONNÉES RÉELLES DU TABLEAU DE BORD (À UTILISER DANS LE RÉSUMÉ) ===`,
+      data_footer: `=== FIN DES DONNÉES RÉELLES ===`,
+      sections_label: `Le résumé doit inclure (en français) :`,
+      sections: [
+        `1. Contexte et objectif du projet`,
+        `2. Performance du modèle (points forts et limites)`,
+        `3. Points clés des prévisions : chiffres RÉELS issus des données ci-dessus (total prévu, familles principales, tendances journalières, pics de vente)`,
+        `4. Analyse par famille de produits avec les volumes prévus réels`,
+        `5. Recommandations opérationnelles pour le gestionnaire du marché (stock, promotions, ressources humaines)`,
+        `6. Pistes d'amélioration futures`
+      ].join('\n'),
+      important: `IMPORTANT : Utilise impérativement les chiffres réels fournis dans les données ci-dessus. Ne génère pas de chiffres fictifs.\nFormat structuré avec titres numérotés. Sois concis mais complet. Réponds UNIQUEMENT en français.`
+    },
+    en: {
+      intro: `You are a BI analyst specialized in retail. Generate a COMPLETE and professional executive summary IN ENGLISH of the "Dylia Market" dashboard (Tizi-Ouzou, Algeria). IMPORTANT: your entire response must be written in English only — do not switch to French at any point.`,
+      context_label: `Project context:`,
+      context: [
+        `- Market: Dylia Market, Tizi-Ouzou, Algeria`,
+        `- ML Model: 28 independent LightGBM models (DIRECT multi-horizon approach)`,
+        `- Average NWRMSLE score: 0.4487 (best D1=0.389, worst D26=0.512)`,
+        `- Forecast horizon: 28 days`,
+        `- Proxy dataset: Store 39, Cuenca, Ecuador (selected via normalized distance)`,
+        `- 62 features across 8 families (calendar, lags, rolling stats, transactions, oil, promotions, holidays, item stats)`,
+        `- Optuna optimization: 50 trials × 28 models = 1,400 evaluations`,
+        `- Known future features: 9 variables (promos, holidays, weekends)`,
+        `- Final training: 2 min 25 sec · Triple-level cache active`
+      ].join('\n'),
+      data_header: `=== REAL DASHBOARD DATA (USE IN THE SUMMARY) ===`,
+      data_footer: `=== END OF REAL DATA ===`,
+      sections_label: `The summary must include (in English):`,
+      sections: [
+        `1. Project context and objective`,
+        `2. Model performance (strengths and limitations)`,
+        `3. Key forecast highlights: REAL figures from the data above (total forecast, top families, daily trends, sales peaks)`,
+        `4. Product family analysis with actual forecast volumes`,
+        `5. Operational recommendations for the market manager (inventory, promotions, staffing)`,
+        `6. Future improvement areas`
+      ].join('\n'),
+      important: `IMPORTANT: You MUST use the real figures provided in the data above. Do not invent numbers.\nUse a structured format with numbered headings. Be concise but comprehensive. Respond ENTIRELY IN ENGLISH — do not use French anywhere in your response.`
+    },
+    ar: {
+      intro: `أنت محلل ذكاء أعمال متخصص في التجزئة. أنشئ ملخصاً تنفيذياً كاملاً ومهنياً باللغة العربية للوحة تحكم "سوق ضاية" (تيزي وزو، الجزائر).`,
+      context_label: `سياق المشروع:`,
+      context: [
+        `- السوق: ضاية ماركت، تيزي وزو، الجزائر`,
+        `- نموذج ML: 28 نموذج LightGBM مستقل (نهج مباشر DIRECT)`,
+        `- متوسط درجة NWRMSLE: 0.4487 (أفضل Y1=0.389، أسوأ Y26=0.512)`,
+        `- أفق التوقع: 28 يومًا`,
+        `- مجموعة البيانات الوكيلة: المتجر 39، كوينكا، الإكوادور`,
+        `- 62 ميزة في 8 عائلات (تقويمية، تأخيرات، إحصاء متحرك، معاملات، نفط، ترقيات، أعياد، إحصاء المنتج)`,
+        `- تحسين Optuna: 50 تجربة × 28 نموذجًا = 1400 تقييم`,
+        `- ميزات مستقبلية معروفة: 9 متغيرات`,
+        `- التدريب النهائي: 2 د 25 ث · ذاكرة تخزين مؤقت ثلاثية المستوى`
+      ].join('\n'),
+      data_header: `=== البيانات الحقيقية للوحة القيادة (استخدمها في الملخص) ===`,
+      data_footer: `=== نهاية البيانات الحقيقية ===`,
+      sections_label: `يجب أن يتضمن الملخص (باللغة العربية):`,
+      sections: [
+        `1. سياق المشروع وهدفه`,
+        `2. أداء النموذج (نقاط القوة والقيود)`,
+        `3. أبرز التوقعات: أرقام حقيقية من البيانات أعلاه`,
+        `4. تحليل عائلات المنتجات بالأحجام الفعلية المتوقعة`,
+        `5. توصيات تشغيلية لمدير السوق (المخزون، الترقيات، الموارد البشرية)`,
+        `6. مسارات التحسين المستقبلية`
+      ].join('\n'),
+      important: `مهم: استخدم الأرقام الحقيقية المقدمة في البيانات أعلاه. لا تخترع أرقامًا.\nتنسيق منظم مع عناوين مرقمة. أجب باللغة العربية فقط.`
+    },
+    es: {
+      intro: `Eres un analista de BI especializado en retail. Genera un resumen ejecutivo COMPLETO y profesional EN ESPAÑOL del panel "Dylia Market" (Tizi-Ouzou, Argelia).`,
+      context_label: `Contexto del proyecto:`,
+      context: [
+        `- Mercado: Dylia Market, Tizi-Ouzou, Argelia`,
+        `- Modelo ML: 28 modelos LightGBM independientes (enfoque directo DIRECT)`,
+        `- Puntuación NWRMSLE media: 0.4487 (mejor D1=0.389, peor D26=0.512)`,
+        `- Horizonte de pronóstico: 28 días`,
+        `- Dataset proxy: Tienda 39, Cuenca, Ecuador (selección por distancia normalizada)`,
+        `- 62 características en 8 familias (calendario, lags, rolling stats, transacciones, petróleo, promociones, festivos, stats artículo)`,
+        `- Optimización Optuna: 50 pruebas × 28 modelos = 1.400 evaluaciones`,
+        `- Características futuras conocidas: 9 variables`,
+        `- Entrenamiento final: 2 min 25 seg · Caché triple nivel activo`
+      ].join('\n'),
+      data_header: `=== DATOS REALES DEL PANEL (USAR EN EL RESUMEN) ===`,
+      data_footer: `=== FIN DE LOS DATOS REALES ===`,
+      sections_label: `El resumen debe incluir (en español):`,
+      sections: [
+        `1. Contexto y objetivo del proyecto`,
+        `2. Rendimiento del modelo (puntos fuertes y limitaciones)`,
+        `3. Puntos clave de los pronósticos: cifras REALES de los datos anteriores`,
+        `4. Análisis por familia de productos con volúmenes previstos reales`,
+        `5. Recomendaciones operativas para el gestor del mercado (stock, promociones, RRHH)`,
+        `6. Vías de mejora futuras`
+      ].join('\n'),
+      important: `IMPORTANTE: Usa obligatoriamente las cifras reales proporcionadas en los datos. No inventes números.\nFormato estructurado con títulos numerados. Sé conciso pero completo. Responde ÚNICAMENTE en español.`
+    },
+    it: {
+      intro: `Sei un analista BI specializzato nel retail. Genera un riassunto esecutivo COMPLETO e professionale IN ITALIANO del dashboard "Dylia Market" (Tizi-Ouzou, Algeria).`,
+      context_label: `Contesto del progetto:`,
+      context: [
+        `- Mercato: Dylia Market, Tizi-Ouzou, Algeria`,
+        `- Modello ML: 28 modelli LightGBM indipendenti (approccio diretto DIRECT)`,
+        `- Punteggio NWRMSLE medio: 0.4487 (migliore G1=0.389, peggiore G26=0.512)`,
+        `- Orizzonte previsionale: 28 giorni`,
+        `- Dataset proxy: Negozio 39, Cuenca, Ecuador (selezione per distanza normalizzata)`,
+        `- 62 feature in 8 famiglie (calendario, lag, rolling stats, transazioni, petrolio, promozioni, festività, stats articolo)`,
+        `- Ottimizzazione Optuna: 50 prove × 28 modelli = 1.400 valutazioni`,
+        `- Feature future note: 9 variabili`,
+        `- Addestramento finale: 2 min 25 sec · Cache a triplo livello attiva`
+      ].join('\n'),
+      data_header: `=== DATI REALI DEL DASHBOARD (DA USARE NEL RIASSUNTO) ===`,
+      data_footer: `=== FINE DEI DATI REALI ===`,
+      sections_label: `Il riassunto deve includere (in italiano):`,
+      sections: [
+        `1. Contesto e obiettivo del progetto`,
+        `2. Performance del modello (punti di forza e limiti)`,
+        `3. Punti chiave delle previsioni: cifre REALI dai dati sopra`,
+        `4. Analisi per famiglia di prodotti con volumi previsti reali`,
+        `5. Raccomandazioni operative per il gestore del mercato (scorte, promozioni, personale)`,
+        `6. Piste di miglioramento future`
+      ].join('\n'),
+      important: `IMPORTANTE: Usa obbligatoriamente le cifre reali fornite nei dati sopra. Non inventare numeri.\nFormato strutturato con titoli numerati. Sii conciso ma completo. Rispondi SOLO in italiano.`
+    }
+  };
+
+  const p = prompts[langCode] || prompts.fr;
+
+  const realDataBlock = forecastData
+    ? `\n${p.data_header}\n${forecastData}\n${p.data_footer}\n`
+    : '';
+
+  return `${p.intro}
+
+${p.context_label}
+${p.context}
+${realDataBlock}
+${p.sections_label}
+${p.sections}
+
+${p.important}`;
+}
+
+function copyAiSummary() {
+  const text = document.getElementById('summary-text')?.dataset?.raw || '';
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('btn-copy-summary');
+    if (!btn) return;
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i data-lucide="check" style="width:13px;height:13px;"></i> Copié !';
+    lucide.createIcons();
+    setTimeout(() => { btn.innerHTML = orig; lucide.createIcons(); }, 2000);
+  });
+}
+
+// Voices preload
+window.speechSynthesis && window.speechSynthesis.addEventListener('voiceschanged', () => {
+  window.speechSynthesis.getVoices();
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => lucide.createIcons(), 500);
+});
+</script>
+</body>
+</html>
