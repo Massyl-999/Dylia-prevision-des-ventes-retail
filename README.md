@@ -19,7 +19,7 @@ Application de prévision à 28 jours des ventes par produit. Le projet prépare
 Prérequis : Python 3.10 ou plus récent.
 
 ```bash
-git clone <URL_DE_VOTRE_DEPOT>
+git clone https://github.com/Massyl-999/Dylia-prevision-des-ventes-retail
 cd Dylia_Project
 python -m venv .venv
 ```
